@@ -1,8 +1,10 @@
 ﻿using Discord;
+using Discord.Commands;
 using Discord.Interactions;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 
 namespace Red;
 
@@ -10,8 +12,10 @@ internal static class Program
 {
     private static void Main()
     {
+        Serilog();
+
         IConfiguration config = new ConfigurationBuilder()
-            .AddEnvironmentVariables("DC_")
+            .AddJsonFile("secrets.json", true)
             .AddJsonFile("app-settings.json", true)
             .Build();
 
@@ -20,7 +24,6 @@ internal static class Program
 
     private static async Task RunAsync(IConfiguration configuration)
     {
-        // Dependency injection is a key part of the Interactions framework but it needs to be disposed at the end of the app's lifetime.
         await using var services = ConfigureServices(configuration);
 
         var client = services.GetRequiredService<DiscordSocketClient>();
@@ -30,13 +33,11 @@ internal static class Program
         commands.Log += LogAsync;
 
         // Slash Commands and Context Commands are can be automatically registered, but this process needs to happen after the client enters the READY state.
-        // Since Global Commands take around 1 hour to register, we should use a test guild to instantly update and test our commands. To determine the method we should
-        // register the commands with, we can check whether we are in a DEBUG environment and if we are, we can register the commands to a predetermined test guild.
+        // Since Global Commands take around 1 hour to register, we should use a test guild to instantly update and test our commands.
         client.Ready += async () =>
         {
             if (IsDebug())
-                // Id of the test guild can be provided from the Configuration object
-                await commands.RegisterCommandsToGuildAsync(configuration.GetValue<ulong>("testGuild"));
+                await commands.RegisterCommandsToGuildAsync(configuration.GetValue<ulong>("698934302720786503"));   // Add here ID of testing guild.
             else
                 await commands.RegisterCommandsGloballyAsync();
         };
@@ -53,7 +54,15 @@ internal static class Program
 
     private static Task LogAsync(LogMessage message)
     {
-        Console.WriteLine(message.ToString());
+        if (message.Exception is CommandException cmdException)
+        {
+            Console.WriteLine($"[Command/{message.Severity}] {cmdException.Command.Aliases[0]}"
+                + $" failed to execute in {cmdException.Context.Channel}.");
+            Console.WriteLine(cmdException);
+        }
+        else
+            Console.WriteLine($"[General/{message.Severity}] {message}");
+
         return Task.CompletedTask;
     }
 
@@ -74,5 +83,20 @@ internal static class Program
 #else
                 return false;
 #endif
+    }
+
+    private static void Serilog()
+    {
+        Log.Logger = new LoggerConfiguration()
+        .MinimumLevel.Information()
+        .WriteTo.Console()
+        .WriteTo.File("log.txt",
+            rollingInterval: RollingInterval.Day,
+            rollOnFileSizeLimit: true)
+        .CreateLogger();
+
+        Log.Information("Logging initialized!");
+
+        Log.CloseAndFlush();
     }
 }
