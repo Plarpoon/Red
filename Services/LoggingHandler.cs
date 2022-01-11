@@ -4,20 +4,20 @@ using Serilog.Events;
 
 namespace Red.Services;
 
-internal class LoggingHandler
+internal static class LoggingHandler
 {
     internal static void Serilog()
     {
         Log.Logger = new LoggerConfiguration()
-        .MinimumLevel.Verbose()
-        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-        .WriteTo.Console(outputTemplate:
-        "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
-        .WriteTo.File("logs/log.txt",
-            outputTemplate: "{Timestamp:dd-MM-yyyy HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
-            rollingInterval: RollingInterval.Minute,
-            rollOnFileSizeLimit: true)
-        .CreateLogger();
+            .MinimumLevel.Verbose()
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+            .WriteTo.Console(outputTemplate:
+                "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.File("logs/log.txt",
+                outputTemplate: "{Timestamp:dd-MM-yyyy HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                rollingInterval: RollingInterval.Minute,
+                rollOnFileSizeLimit: true)
+            .CreateLogger();
 
         Log.Information("Red starting!");
         Log.Information("Logging initialized!");
@@ -36,7 +36,8 @@ internal class LoggingHandler
             _ => LogEventLevel.Information
         };
 
-        Log.Write(severity, message.Exception, "[{Source}] {Message}", message.Source, message.Message);
+        Log.Write(severity, message.Exception, "[{Source}] {Message}",
+            message.Source, message.Message);
 
         return Task.CompletedTask;
     }

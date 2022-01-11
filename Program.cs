@@ -3,6 +3,7 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Red.Services;
 
 namespace Red;
 
@@ -10,7 +11,7 @@ internal static class Program
 {
     private static void Main()
     {
-        Services.LoggingHandler.Serilog();
+        LoggingHandler.Serilog();
 
         IConfiguration config = new ConfigurationBuilder()
             .AddJsonFile("secrets.json", true)
@@ -27,15 +28,16 @@ internal static class Program
         var client = services.GetRequiredService<DiscordSocketClient>();
         var commands = services.GetRequiredService<InteractionService>();
 
-        client.Log += Services.LoggingHandler.LogAsync;
-        commands.Log += Services.LoggingHandler.LogAsync;
+        client.Log += LoggingHandler.LogAsync;
+        commands.Log += LoggingHandler.LogAsync;
 
         // Slash Commands and Context Commands can be automatically registered, but this process needs to happen after the client enters the READY state.
         // Since Global Commands take around 1 hour to register, we should use a test guild to instantly update and test our commands.
         client.Ready += async () =>
         {
             if (IsDebug())
-                await commands.RegisterCommandsToGuildAsync(configuration.GetValue<ulong>("698934302720786503"));   // Add here ID of testing guild.
+                await commands.RegisterCommandsToGuildAsync(
+                    configuration.GetValue<ulong>("698934302720786503")); // Add here ID of testing guild.
             else
                 await commands.RegisterCommandsGloballyAsync();
         };
