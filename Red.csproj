@@ -8,6 +8,7 @@
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <DockerfileContext>.</DockerfileContext>
     <Platforms>AnyCPU;x64;ARM64</Platforms>
+    <StartupObject>Red.Program</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +30,9 @@
 
 	  <ItemGroup>
 	    <None Update="secrets.json">
+	      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	    </None>
+	    <None Update="settings.json">
 	      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	    </None>
 	  </ItemGroup>

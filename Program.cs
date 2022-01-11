@@ -1,10 +1,8 @@
 ﻿using Discord;
-using Discord.Commands;
 using Discord.Interactions;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Serilog;
 
 namespace Red;
 
@@ -12,7 +10,7 @@ internal static class Program
 {
     private static void Main()
     {
-        Serilog();
+        Services.LoggingHandler.Serilog();
 
         IConfiguration config = new ConfigurationBuilder()
             .AddJsonFile("secrets.json", true)
@@ -29,10 +27,10 @@ internal static class Program
         var client = services.GetRequiredService<DiscordSocketClient>();
         var commands = services.GetRequiredService<InteractionService>();
 
-        client.Log += LogAsync;
-        commands.Log += LogAsync;
+        client.Log += Services.LoggingHandler.LogAsync;
+        commands.Log += Services.LoggingHandler.LogAsync;
 
-        // Slash Commands and Context Commands are can be automatically registered, but this process needs to happen after the client enters the READY state.
+        // Slash Commands and Context Commands can be automatically registered, but this process needs to happen after the client enters the READY state.
         // Since Global Commands take around 1 hour to register, we should use a test guild to instantly update and test our commands.
         client.Ready += async () =>
         {
@@ -52,20 +50,6 @@ internal static class Program
         await Task.Delay(Timeout.Infinite);
     }
 
-    private static Task LogAsync(LogMessage message)
-    {
-        if (message.Exception is CommandException cmdException)
-        {
-            Console.WriteLine($"[Command/{message.Severity}] {cmdException.Command.Aliases[0]}"
-                + $" failed to execute in {cmdException.Context.Channel}.");
-            Console.WriteLine(cmdException);
-        }
-        else
-            Console.WriteLine($"[General/{message.Severity}] {message}");
-
-        return Task.CompletedTask;
-    }
-
     private static ServiceProvider ConfigureServices(IConfiguration configuration)
     {
         return new ServiceCollection()
@@ -83,20 +67,5 @@ internal static class Program
 #else
                 return false;
 #endif
-    }
-
-    private static void Serilog()
-    {
-        Log.Logger = new LoggerConfiguration()
-        .MinimumLevel.Information()
-        .WriteTo.Console()
-        .WriteTo.File("log.txt",
-            rollingInterval: RollingInterval.Day,
-            rollOnFileSizeLimit: true)
-        .CreateLogger();
-
-        Log.Information("Logging initialized!");
-
-        Log.CloseAndFlush();
     }
 }
