@@ -11,8 +11,10 @@ internal class LoggingHandler
         Log.Logger = new LoggerConfiguration()
         .MinimumLevel.Verbose()
         .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-        .WriteTo.Console()
+        .WriteTo.Console(outputTemplate:
+        "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
         .WriteTo.File("logs/log.txt",
+            outputTemplate: "{Timestamp:dd-MM-yyyy HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
             rollingInterval: RollingInterval.Minute,
             rollOnFileSizeLimit: true)
         .CreateLogger();
@@ -23,72 +25,19 @@ internal class LoggingHandler
 
     internal static Task LogAsync(LogMessage message)
     {
-        if (message.Exception is Discord.Commands.CommandException cmdException)
+        var severity = message.Severity switch
         {
-            switch (message.Severity)
-            {
-                case Discord.LogSeverity.Critical:
-                    Log.Fatal($"[Command/{message.Severity}] {cmdException.Command.Aliases[0]}"
-            + $" failed to execute in {cmdException.Context.Channel}.");
-                    break;
+            LogSeverity.Critical => LogEventLevel.Fatal,
+            LogSeverity.Error => LogEventLevel.Error,
+            LogSeverity.Warning => LogEventLevel.Warning,
+            LogSeverity.Info => LogEventLevel.Information,
+            LogSeverity.Verbose => LogEventLevel.Verbose,
+            LogSeverity.Debug => LogEventLevel.Debug,
+            _ => LogEventLevel.Information
+        };
 
-                case Discord.LogSeverity.Debug:
-                    Log.Debug($"[Command/{message.Severity}] {cmdException.Command.Aliases[0]}"
-            + $" failed to execute in {cmdException.Context.Channel}.");
-                    break;
+        Log.Write(severity, message.Exception, "[{Source}] {Message}", message.Source, message.Message);
 
-                case Discord.LogSeverity.Error:
-                    Log.Error($"[Command/{message.Severity}] {cmdException.Command.Aliases[0]}"
-            + $" failed to execute in {cmdException.Context.Channel}.");
-                    break;
-
-                case Discord.LogSeverity.Info:
-                    Log.Information($"[Command/{message.Severity}] {cmdException.Command.Aliases[0]}"
-            + $" failed to execute in {cmdException.Context.Channel}.");
-                    break;
-
-                case Discord.LogSeverity.Verbose:
-                    Log.Verbose($"[Command/{message.Severity}] {cmdException.Command.Aliases[0]}"
-            + $" failed to execute in {cmdException.Context.Channel}.");
-                    break;
-
-                case Discord.LogSeverity.Warning:
-                    Log.Warning($"[Command/{message.Severity}] {cmdException.Command.Aliases[0]}"
-            + $" failed to execute in {cmdException.Context.Channel}.");
-                    break;
-            }
-        }
-        else
-        {
-            switch (message.Severity)
-            {
-                case Discord.LogSeverity.Critical:
-                    Log.Fatal($"[General/{message.Severity}] {message}");
-                    break;
-
-                case Discord.LogSeverity.Debug:
-                    Log.Debug($"[General/{message.Severity}] {message}");
-                    break;
-
-                case Discord.LogSeverity.Error:
-                    Log.Error($"[General/{message.Severity}] {message}");
-                    break;
-
-                case Discord.LogSeverity.Info:
-                    Log.Information($"[General/{message.Severity}] {message}");
-                    break;
-
-                case Discord.LogSeverity.Verbose:
-                    Log.Verbose($"[General/{message.Severity}] {message}");
-                    break;
-
-                case Discord.LogSeverity.Warning:
-                    Log.Warning($"[General/{message.Severity}] {message}");
-                    break;
-            }
-        }
-
-        Console.WriteLine(message);   /*DEBUGGING*/
         return Task.CompletedTask;
     }
 }
