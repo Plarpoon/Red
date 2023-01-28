@@ -1,5 +1,6 @@
+using Discord;
 using Discord.Interactions;
-using Discord.webSocket;
+using Discord.WebSocket;
 using System.Reflection;
 
 namespace Red
@@ -29,7 +30,7 @@ namespace Red
             try
             {
                 var ctx = new SocketInteractionContext(_client, arg);
-                await _commands.ExecuteCommandsAsync(ctx, _services);
+                await _commands.ExecuteCommandAsync(ctx, _services);
             }
             catch (Exception ex)
             {

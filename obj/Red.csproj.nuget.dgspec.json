@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "/home/plarpoon/Git/Red/Red.csproj": {}
+    "d:\\Red\\Red.csproj": {}
   },
   "projects": {
-    "/home/plarpoon/Git/Red/Red.csproj": {
+    "d:\\Red\\Red.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/home/plarpoon/Git/Red/Red.csproj",
+        "projectUniqueName": "d:\\Red\\Red.csproj",
         "projectName": "Red",
-        "projectPath": "/home/plarpoon/Git/Red/Red.csproj",
-        "packagesPath": "/home/plarpoon/.nuget/packages/",
-        "outputPath": "/home/plarpoon/Git/Red/obj/",
+        "projectPath": "d:\\Red\\Red.csproj",
+        "packagesPath": "C:\\Users\\plarp\\.nuget\\packages\\",
+        "outputPath": "d:\\Red\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "/home/plarpoon/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\plarp\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net7.0"
@@ -37,6 +37,20 @@
       "frameworks": {
         "net7.0": {
           "targetAlias": "net7.0",
+          "dependencies": {
+            "Discord.Net": {
+              "target": "Package",
+              "version": "[3.9.0, )"
+            },
+            "Microsoft.Extensions.DependencyInjection": {
+              "target": "Package",
+              "version": "[7.0.0, )"
+            },
+            "Microsoft.Extensions.Hosting": {
+              "target": "Package",
+              "version": "[7.0.0, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
@@ -53,7 +67,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/lib64/dotnet/sdk/7.0.102/RuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\7.0.102\\RuntimeIdentifierGraph.json"
         }
       }
     }

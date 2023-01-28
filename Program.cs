@@ -1,5 +1,6 @@
 ﻿using Discord;
-using Discord.webSocket;
+using Discord.WebSocket;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -11,7 +12,9 @@ namespace Red
 
         public async Task MainAsync()
         {
-            using IHost host = host.CreteDefaultBuilder()
+            var config = new ConfigurationBuilder();
+
+            using IHost host = Host.CreateDefaultBuilder()
             .ConfigureServices((_, services) =>
             services
             .AddSingleton(x => new DiscordSocketClient(new DiscordSocketConfig
@@ -21,12 +24,12 @@ namespace Red
             })))
             .Build();
 
-            await host.RunAsync(host);
+            await RunAsync(host);
         }
 
         public async Task RunAsync(IHost host)
         {
-            using IServiceScope serviceScope = host.Services.ConfigureServices();
+            using IServiceScope serviceScope = host.Services.CreateScope();
             IServiceProvider provider = serviceScope.ServiceProvider;
 
             var _client = provider.GetRequiredService<DiscordSocketClient>();
