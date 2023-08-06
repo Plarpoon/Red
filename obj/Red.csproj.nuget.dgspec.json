@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "d:\\Red\\Red.csproj": {}
+    "/home/plarpoon/Git/Red/Red.csproj": {}
   },
   "projects": {
-    "d:\\Red\\Red.csproj": {
+    "/home/plarpoon/Git/Red/Red.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "d:\\Red\\Red.csproj",
+        "projectUniqueName": "/home/plarpoon/Git/Red/Red.csproj",
         "projectName": "Red",
-        "projectPath": "d:\\Red\\Red.csproj",
-        "packagesPath": "C:\\Users\\plarp\\.nuget\\packages\\",
-        "outputPath": "d:\\Red\\obj\\",
+        "projectPath": "/home/plarpoon/Git/Red/Red.csproj",
+        "packagesPath": "/home/plarpoon/.nuget/packages/",
+        "outputPath": "/home/plarpoon/Git/Red/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\plarp\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "/home/plarpoon/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net7.0"
@@ -38,17 +38,21 @@
         "net7.0": {
           "targetAlias": "net7.0",
           "dependencies": {
-            "Discord.Net": {
+            "DSharpPlus": {
               "target": "Package",
-              "version": "[3.9.0, )"
+              "version": "[5.0.0, )"
             },
-            "Microsoft.Extensions.DependencyInjection": {
+            "DSharpPlus.CommandsNext": {
               "target": "Package",
-              "version": "[7.0.0, )"
+              "version": "[5.0.0, )"
             },
-            "Microsoft.Extensions.Hosting": {
+            "DSharpPlus.SlashCommands": {
               "target": "Package",
-              "version": "[7.0.0, )"
+              "version": "[5.0.0, )"
+            },
+            "YamlDotNet": {
+              "target": "Package",
+              "version": "[13.1.1, )"
             }
           },
           "imports": [
@@ -67,7 +71,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\7.0.102\\RuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/7.0.306/RuntimeIdentifierGraph.json"
         }
       }
     }

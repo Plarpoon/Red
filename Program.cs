@@ -1,50 +1,62 @@
-﻿using Discord;
-using Discord.WebSocket;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using System;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+using DSharpPlus;
+using DSharpPlus.CommandsNext;
+using DSharpPlus.SlashCommands;
+using YamlDotNet.Serialization;
 
-namespace Red
+namespace EvilBunny
 {
     public class Program
     {
-        public static Task Main() => new Program().MainAsync();
-
-        public async Task MainAsync()
+        public static async Task Main(string[] args)
         {
-            var config = new ConfigurationBuilder();
+            // Read the bot token from the YAML file
+            var deserializer = new DeserializerBuilder().Build();
+            var config = deserializer.Deserialize<Config>(File.ReadAllText("config.yaml"));
+            var token = config.Token;
 
-            using IHost host = Host.CreateDefaultBuilder()
-            .ConfigureServices((_, services) =>
-            services
-            .AddSingleton(x => new DiscordSocketClient(new DiscordSocketConfig
+            // Create the Discord client
+            var discord = new DiscordClient(new DiscordConfiguration
             {
-                GatewayIntents = GatewayIntents.AllUnprivileged,
-                AlwaysDownloadUsers = true,
-            })))
-            .Build();
+                Token = token,
+                TokenType = TokenType.Bot,
+                Intents = DiscordIntents.AllUnprivileged
+            });
 
-            await RunAsync(host);
-        }
-
-        public async Task RunAsync(IHost host)
-        {
-            using IServiceScope serviceScope = host.Services.CreateScope();
-            IServiceProvider provider = serviceScope.ServiceProvider;
-
-            var _client = provider.GetRequiredService<DiscordSocketClient>();
-
-            _client.Log += async (LogMessage msg) => { Console.WriteLine(msg.Message); };
-
-            _client.Ready += async () =>
+            // Register the CommandsNext module
+            var commands = discord.UseCommandsNext(new CommandsNextConfiguration
             {
-                Console.WriteLine("Bot is connected!");
-            };
+                StringPrefixes = new[] { "!" }
+            });
 
-            await _client.LoginAsync(TokenType.Bot, "token");
-            await _client.StartAsync();
+            // Register the SlashCommands module
+            var slash = discord.UseSlashCommands();
 
+            // Load standard commands from the Commands folder using reflection
+            var commandsAssembly = Assembly.GetExecutingAssembly();
+            var commandTypes = commandsAssembly.GetTypes()
+                .Where(t => t.IsSubclassOf(typeof(BaseCommandModule)) && t.Namespace == "EvilBunny.Command");
+            foreach (var commandType in commandTypes)
+                commands.RegisterCommands(commandType);
+
+            // Load slash commands from the SlashCommand folder using reflection
+            var slashCommandTypes = commandsAssembly.GetTypes()
+                .Where(t => t.IsSubclassOf(typeof(ApplicationCommandModule)) && t.Namespace == "EvilBunny.SlashCommands");
+            foreach (var slashCommandType in slashCommandTypes)
+                slash.RegisterCommands(slashCommandType);
+
+            // Connect to Discord and start the bot
+            await discord.ConnectAsync();
             await Task.Delay(-1);
         }
+    }
+
+    public class Config
+    {
+        public string Token { get; set; }
     }
 }
