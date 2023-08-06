@@ -2,9 +2,9 @@ using System.Threading.Tasks;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
 
-namespace EvilBunny.Command
+namespace EvilBunny.Commands
 {
-    public class ExampleCommand : BaseCommandModule
+    public class Commands : BaseCommandModule
     {
         [Command("hello")]
         [Description("Responds with a greeting")]

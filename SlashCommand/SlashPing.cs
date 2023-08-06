@@ -5,7 +5,7 @@ using DSharpPlus.SlashCommands;
 
 namespace EvilBunny.SlashCommands
 {
-    public class ExampleSlashCommand : ApplicationCommandModule
+    public class SlashCommands : ApplicationCommandModule
     {
         [SlashCommand("ping", "Responds with pong")]
         public async Task Ping(InteractionContext ctx)

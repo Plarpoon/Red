@@ -40,7 +40,7 @@ namespace EvilBunny
             // Load standard commands from the Commands folder using reflection
             var commandsAssembly = Assembly.GetExecutingAssembly();
             var commandTypes = commandsAssembly.GetTypes()
-                .Where(t => t.IsSubclassOf(typeof(BaseCommandModule)) && t.Namespace == "EvilBunny.Command");
+                .Where(t => t.IsSubclassOf(typeof(BaseCommandModule)) && t.Namespace == "EvilBunny.Commands");
             foreach (var commandType in commandTypes)
                 commands.RegisterCommands(commandType);
 
