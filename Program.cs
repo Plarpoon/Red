@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
@@ -51,7 +52,26 @@ namespace EvilBunny
 
             // Connect to Discord and start the bot
             await discord.ConnectAsync();
-            await Task.Delay(-1);
+
+            // Wait for a cancellation token to be triggered by CTRL-C on the console
+            var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (sender, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+
+            try
+            {
+                await Task.Delay(-1, cts.Token);
+            }
+            catch (TaskCanceledException)
+            {
+                Console.WriteLine();
+            }
+
+            // Disconnect from Discord and stop the bot gracefully
+            await discord.DisconnectAsync();
         }
     }
 
