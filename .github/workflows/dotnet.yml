@@ -29,3 +29,5 @@ jobs:
         run: docker build -t evilbunny .
       - name: Test Docker image
         run: docker run --rm evilbunny dotnet test --verbosity normal
+      - name: Check dotnet executable
+        run: docker run --rm evilbunny sh -c 'echo $PATH && ls -l $(echo $PATH | tr ":" "\n")'
