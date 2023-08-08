@@ -11,8 +11,15 @@ using YamlDotNet.Serialization;
 
 namespace EvilBunny
 {
+    /// <summary>
+    /// The main program class.
+    /// </summary>
     public class Program
     {
+        /// <summary>
+        /// The main entry point of the program.
+        /// </summary>
+        /// <param name="args">The command line arguments.</param>
         public static async Task Main(string[] args)
         {
             // Read the bot token from the YAML file
@@ -75,8 +82,14 @@ namespace EvilBunny
         }
     }
 
+    /// <summary>
+    /// The configuration class.
+    /// </summary>
     public class Config
     {
+        /// <summary>
+        /// Gets or sets the bot token.
+        /// </summary>
         public string Token { get; set; } = "";
     }
 }
