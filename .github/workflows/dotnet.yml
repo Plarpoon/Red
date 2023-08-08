@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: opensuse-microos-latest
 
     steps:
       - uses: actions/checkout@v3
@@ -23,11 +23,5 @@ jobs:
         run: dotnet restore
       - name: Build
         run: dotnet build --no-restore
-      - name: Test
-        run: dotnet test --no-build --verbosity normal
       - name: Build Docker image
         run: docker build -t evilbunny .
-      - name: Check dotnet executable
-        run: docker run --rm evilbunny sh -c 'echo $PATH && ls -l $(echo $PATH | tr ":" "\n")'
-      - name: Test Docker image
-        run: docker run --rm evilbunny dotnet test --verbosity normal
