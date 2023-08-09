@@ -16,19 +16,8 @@ COPY --from=build-env /app/out .
 FROM mysql:8.0 AS mysql-env
 
 # Set environment variables for MySQL
-ENV MYSQL_USER=evilbunny
-ENV MYSQL_DATABASE=evil_db
-
-# Read MYSQL_PASSWORD from config.yaml file using yq
-RUN export MYSQL_PASSWORD=$(yq e '.DB_PASS' config.yaml)
-
-# Install yq to parse YAML files
-RUN apt-get update && apt-get install -y jq && \
-    wget https://github.com/mikefarah/yq/releases/download/v4.13.5/yq_linux_amd64 -O /usr/bin/yq && \
-    chmod +x /usr/bin/yq
-
-# Copy config.yaml file to the container
-COPY config.yaml .
-
+ENV MYSQL_USER=username
+ENV MYSQL_PASSWORD=password
+ENV MYSQL_DATABASE=database_name
 
 ENTRYPOINT ["dotnet", "EvilBunny.dll"]
