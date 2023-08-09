@@ -16,8 +16,8 @@ COPY --from=build-env /app/out .
 FROM mysql:8.0 AS mysql-env
 
 # Set environment variables for MySQL
-ENV MYSQL_USER=username
-ENV MYSQL_PASSWORD=password
-ENV MYSQL_DATABASE=database_name
+ENV MYSQL_USER=EvilBunny
+#ENV MYSQL_PASSWORD=UNCOMMENT AND WRITE HERE YOUR PASSWORD
+ENV MYSQL_DATABASE=evil_db
 
 ENTRYPOINT ["dotnet", "EvilBunny.dll"]

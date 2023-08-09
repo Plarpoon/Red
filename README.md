@@ -11,7 +11,7 @@ Hi there! I'm Alessandro Suha, the creator of EvilBunny, a powerful and versatil
 
 ## Usage
 
-Using EvilBunny is simple! Once you have cloned this repository and installed the required NuGet packages, simply createe the `config.yaml` file with your bot token. Then, run the bot and use the `help` command to see a list of available commands. You can also use the `help [command]` command to see detailed information about a specific command.
+Using EvilBunny is simple! Once you have cloned this repository and installed the required NuGet packages, simply createe the `config.yaml` file with your bot token and database password. Be also sure to open the Dockerfile and uncomment the password environmental variable adding a proper one for your database. Then, run the bot and use the `help` command to see a list of available commands. You can also use the `help [command]` command to see detailed information about a specific command.
 
 ## Contributing
 
