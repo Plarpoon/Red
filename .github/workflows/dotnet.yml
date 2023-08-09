@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    runs-on: opensuse-microos-latest
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
