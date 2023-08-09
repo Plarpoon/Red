@@ -12,12 +12,4 @@ FROM mcr.microsoft.com/dotnet/runtime:7.0
 WORKDIR /app
 COPY --from=build-env /app/out .
 
-# Use MySQL Docker image as a build environment
-FROM mysql:8.0 AS mysql-env
-
-# Set environment variables for MySQL
-ENV MYSQL_USER=EvilBunny
-#ENV MYSQL_PASSWORD=UNCOMMENT AND WRITE HERE YOUR PASSWORD
-ENV MYSQL_DATABASE=evil_db
-
 ENTRYPOINT ["dotnet", "EvilBunny.dll"]

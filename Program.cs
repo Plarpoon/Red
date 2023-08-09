@@ -27,6 +27,9 @@ namespace EvilBunny
             var config = deserializer.Deserialize<Config>(File.ReadAllText("config.yaml"));
             var token = config.Token;
 
+            // Initialize the database
+            Database.Initialize();
+
             // Create the Discord client
             var discord = new DiscordClient(new DiscordConfiguration
             {
