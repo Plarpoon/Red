@@ -7,7 +7,9 @@ using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.SlashCommands;
+using DSharpPlus.Interactivity.Extensions;
 using YamlDotNet.Serialization;
+using Microsoft.Extensions.Logging;
 
 namespace EvilBunny
 {
@@ -27,16 +29,21 @@ namespace EvilBunny
             var config = deserializer.Deserialize<Config>(File.ReadAllText("config.yaml"));
             var token = config.Token;
 
-            // Initialize the database
-            Database.Initialize();
-
             // Create the Discord client
             var discord = new DiscordClient(new DiscordConfiguration
             {
                 Token = token,
                 TokenType = TokenType.Bot,
-                Intents = DiscordIntents.AllUnprivileged
+                Intents = DiscordIntents.AllUnprivileged,
+                MinimumLogLevel = LogLevel.Debug,
+                LogTimestampFormat = "dd MMM yyyy - hh:mm:ss tt"
             });
+
+            // Initialize the database
+            Database.Initialize(discord);
+
+            // Enable Interactivity
+            var interactivity = discord.UseInteractivity();
 
             // Register the CommandsNext module
             var commands = discord.UseCommandsNext(new CommandsNextConfiguration
