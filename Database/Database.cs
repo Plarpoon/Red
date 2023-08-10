@@ -45,6 +45,9 @@ namespace EvilBunny
             var createSettingsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, value TEXT NOT NULL)", connection);
             createSettingsTableCommand.ExecuteNonQuery();
             discord.Logger.LogInformation("Settings table created successfully.");
+
+            // Call the Populate method of the PopulateDB class
+            PopulateDB.Populate(discord);
         }
     }
 }
