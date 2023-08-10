@@ -35,12 +35,16 @@ namespace EvilBunny
                 Token = token,
                 TokenType = TokenType.Bot,
                 Intents = DiscordIntents.AllUnprivileged,
-                MinimumLogLevel = LogLevel.Debug,
+                MinimumLogLevel = LogLevel.Information,
                 LogTimestampFormat = "dd MMM yyyy - hh:mm:ss tt"
             });
 
             // Initialize the database
             Database.Initialize(discord);
+
+            // Subscribe to the GuildCreated event
+            // When invited into a new Guild trigger below code
+            discord.GuildCreated += async (s, e) => await PopulateDB.Populate(discord);
 
             // Enable Interactivity
             var interactivity = discord.UseInteractivity();
