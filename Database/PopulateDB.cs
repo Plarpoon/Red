@@ -11,17 +11,23 @@ namespace EvilBunny
         public static Task Populate(DiscordClient discord)
         {
             // Create a new SQLite connection
+            discord.Logger.LogInformation("Creating SQLite connection...");
             var connectionString = "Data Source=Database/EvilDB.sqlite;Version=3;";
             using var connection = new SQLiteConnection(connectionString);
             connection.Open();
+            discord.Logger.LogInformation("SQLite connection created successfully.");
 
             // Delete all data from the guilds, channels, and users tables
+            discord.Logger.LogInformation("Deleting all data from the guilds, channels, and users tables...");
             var deleteGuildsCommand = new SQLiteCommand("DELETE FROM guilds", connection);
-            deleteGuildsCommand.ExecuteNonQuery();
+            var rowsAffected = deleteGuildsCommand.ExecuteNonQuery();
+            discord.Logger.LogInformation($"Deleted {rowsAffected} rows from the guilds table.");
             var deleteChannelsCommand = new SQLiteCommand("DELETE FROM channels", connection);
-            deleteChannelsCommand.ExecuteNonQuery();
+            rowsAffected = deleteChannelsCommand.ExecuteNonQuery();
+            discord.Logger.LogInformation($"Deleted {rowsAffected} rows from the channels table.");
             var deleteUsersCommand = new SQLiteCommand("DELETE FROM users", connection);
-            deleteUsersCommand.ExecuteNonQuery();
+            rowsAffected = deleteUsersCommand.ExecuteNonQuery();
+            discord.Logger.LogInformation($"Deleted {rowsAffected} rows from the users table.");
 
             // Check all Discord guilds that have invited the bot
             discord.Logger.LogInformation("Checking all Discord guilds that have invited the bot...");
@@ -31,8 +37,8 @@ namespace EvilBunny
                 discord.Logger.LogInformation($"Inserting guild {guild.Name} into database...");
                 var insertGuildCommand = new SQLiteCommand("INSERT INTO guilds (guild_id) VALUES (@guild_id)", connection);
                 insertGuildCommand.Parameters.AddWithValue("@guild_id", guild.Id.ToString());
-                insertGuildCommand.ExecuteNonQuery();
-                discord.Logger.LogInformation($"Guild {guild.Name} inserted into database successfully.");
+                rowsAffected = insertGuildCommand.ExecuteNonQuery();
+                discord.Logger.LogInformation($"Inserted {rowsAffected} row(s) into the guilds table for guild {guild.Name}.");
 
                 // Populate the database with all of the settings from that guild
                 foreach (var channel in guild.Channels.Values)
@@ -42,7 +48,8 @@ namespace EvilBunny
                     insertChannelCommand.Parameters.AddWithValue("@channel_id", channel.Id.ToString());
                     insertChannelCommand.Parameters.AddWithValue("@channel_name", channel.Name);
                     insertChannelCommand.Parameters.AddWithValue("@permissions", permissions.ToString());
-                    insertChannelCommand.ExecuteNonQuery();
+                    rowsAffected = insertChannelCommand.ExecuteNonQuery();
+                    discord.Logger.LogInformation($"Inserted {rowsAffected} row(s) into the channels table for channel {channel.Name} in guild {guild.Name}.");
                 }
 
                 foreach (var member in guild.Members.Values)
@@ -52,7 +59,8 @@ namespace EvilBunny
                     insertUserCommand.Parameters.AddWithValue("@username", member.Username);
                     insertUserCommand.Parameters.AddWithValue("@discriminator", member.Discriminator);
                     insertUserCommand.Parameters.AddWithValue("@roles", string.Join(",", member.Roles));
-                    insertUserCommand.ExecuteNonQuery();
+                    rowsAffected = insertUserCommand.ExecuteNonQuery();
+                    discord.Logger.LogInformation($"Inserted {rowsAffected} row(s) into the users table for user {member.Username}#{member.Discriminator} in guild {guild.Name}.");
                 }
             }
             discord.Logger.LogInformation("All Discord guilds checked successfully.");

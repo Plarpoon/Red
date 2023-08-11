@@ -74,6 +74,9 @@ namespace EvilBunny
             // Connect to Discord and start the bot
             await discord.ConnectAsync();
 
+            // Populate the database with data from all guilds that have already invited the bot
+            await PopulateDB.Populate(discord);
+
             // Wait for a cancellation token to be triggered by CTRL-C on the console
             var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (sender, e) =>
