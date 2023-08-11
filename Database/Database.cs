@@ -24,7 +24,7 @@ namespace EvilBunny
 
             // Create the guilds table
             discord.Logger.LogInformation("Creating guilds table...");
-            var createGuildsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS guilds (id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL)", connection);
+            var createGuildsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS guilds (id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, admins TEXT)", connection);
             createGuildsTableCommand.ExecuteNonQuery();
             discord.Logger.LogInformation("Guilds table created successfully.");
 
@@ -36,15 +36,21 @@ namespace EvilBunny
 
             // Create the users table
             discord.Logger.LogInformation("Creating users table...");
-            var createUsersTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, username TEXT NOT NULL, discriminator TEXT NOT NULL, roles TEXT NOT NULL)", connection);
+            var createUsersTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, username TEXT NOT NULL, discriminator TEXT NOT NULL, guild_id TEXT NOT NULL, guild_name TEXT NOT NULL)", connection);
             createUsersTableCommand.ExecuteNonQuery();
             discord.Logger.LogInformation("Users table created successfully.");
 
             // Create the settings table
             discord.Logger.LogInformation("Creating settings table...");
-            var createSettingsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, value TEXT NOT NULL)", connection);
+            var createSettingsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, value TEXT NOT NULL, guild_id TEXT NOT NULL)", connection);
             createSettingsTableCommand.ExecuteNonQuery();
             discord.Logger.LogInformation("Settings table created successfully.");
+
+            // Create the settings table
+            discord.Logger.LogInformation("Creating roles table...");
+            var createRolesTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS roles (id INTEGER PRIMARY KEY AUTOINCREMENT, role_id TEXT NOT NULL, role_name TEXT NOT NULL, guild_id TEXT NOT NULL)", connection);
+            createRolesTableCommand.ExecuteNonQuery();
+            discord.Logger.LogInformation("Roles table created successfully.");
         }
     }
 }

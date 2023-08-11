@@ -35,9 +35,11 @@ namespace EvilBunny
             {
                 // Insert the guild into the database
                 discord.Logger.LogInformation($"Inserting guild {guild.Name} into database...");
-                var insertGuildCommand = new SQLiteCommand("INSERT INTO guilds (guild_id) VALUES (@guild_id)", connection);
+                var admins = string.Join(",", guild.Members.Values.Where(m => m.PermissionsIn(guild.GetDefaultChannel()).HasPermission(Permissions.Administrator)).Select(m => m.Id.ToString()));
+                var insertGuildCommand = new SQLiteCommand("INSERT INTO guilds (guild_id, admins) VALUES (@guild_id, @admins)", connection);
                 insertGuildCommand.Parameters.AddWithValue("@guild_id", guild.Id.ToString());
-                rowsAffected = insertGuildCommand.ExecuteNonQuery();
+                insertGuildCommand.Parameters.AddWithValue("@admins", admins);
+                insertGuildCommand.ExecuteNonQuery();
                 discord.Logger.LogInformation($"Inserted {rowsAffected} row(s) into the guilds table for guild {guild.Name}.");
 
                 // Populate the database with all of the settings from that guild
@@ -54,14 +56,29 @@ namespace EvilBunny
 
                 foreach (var member in guild.Members.Values)
                 {
-                    var insertUserCommand = new SQLiteCommand("INSERT INTO users (user_id, username, discriminator, roles) VALUES (@user_id, @username, @discriminator, @roles)", connection);
+                    var insertUserCommand = new SQLiteCommand("INSERT INTO users (user_id, username, discriminator, guild_id, guild_name) VALUES (@user_id, @username, @discriminator, @guild_id, @guild_name)", connection);
                     insertUserCommand.Parameters.AddWithValue("@user_id", member.Id.ToString());
                     insertUserCommand.Parameters.AddWithValue("@username", member.Username);
                     insertUserCommand.Parameters.AddWithValue("@discriminator", member.Discriminator);
-                    insertUserCommand.Parameters.AddWithValue("@roles", string.Join(",", member.Roles));
-                    rowsAffected = insertUserCommand.ExecuteNonQuery();
-                    discord.Logger.LogInformation($"Inserted {rowsAffected} row(s) into the users table for user {member.Username}#{member.Discriminator} in guild {guild.Name}.");
+                    insertUserCommand.Parameters.AddWithValue("@guild_id", guild.Id.ToString());
+                    insertUserCommand.Parameters.AddWithValue("@guild_name", guild.Name);
+                    insertUserCommand.ExecuteNonQuery();
                 }
+
+                foreach (var role in guild.Roles.Values)
+                {
+                    var insertRoleCommand = new SQLiteCommand("INSERT INTO roles (role_id, role_name, guild_id) VALUES (@role_id, @role_name, @guild_id)", connection);
+                    insertRoleCommand.Parameters.AddWithValue("@role_id", role.Id.ToString());
+                    insertRoleCommand.Parameters.AddWithValue("@role_name", role.Name);
+                    insertRoleCommand.Parameters.AddWithValue("@guild_id", guild.Id.ToString());
+                    insertRoleCommand.ExecuteNonQuery();
+                }
+
+                var insertSettingCommand = new SQLiteCommand("INSERT INTO settings (key, value, guild_id) VALUES (@key, @value, @guild_id)", connection);
+                insertSettingCommand.Parameters.AddWithValue("@key", "LoggingEnabled");
+                insertSettingCommand.Parameters.AddWithValue("@value", "OFF");
+                insertSettingCommand.Parameters.AddWithValue("@guild_id", guild.Id.ToString());
+                insertSettingCommand.ExecuteNonQuery();
             }
             discord.Logger.LogInformation("All Discord guilds checked successfully.");
 
