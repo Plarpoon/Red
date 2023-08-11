@@ -1,9 +1,4 @@
-using System;
-using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.SlashCommands;
@@ -22,7 +17,7 @@ namespace EvilBunny
         /// The main entry point of the program.
         /// </summary>
         /// <param name="args">The command line arguments.</param>
-        public static async Task Main(string[] args)
+        public static async Task Main()
         {
             // Read the bot token from the YAML file
             var deserializer = new DeserializerBuilder().Build();
