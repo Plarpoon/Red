@@ -5,20 +5,18 @@ using DSharpPlus.SlashCommands;
 using DSharpPlus.Interactivity.Extensions;
 using YamlDotNet.Serialization;
 using Microsoft.Extensions.Logging;
+using Serilog.Extensions.Logging;
+using EvilBunny.Logs;
 
 namespace EvilBunny
 {
-    /// <summary>
-    /// The main program class.
-    /// </summary>
     public class Program
     {
-        /// <summary>
-        /// The main entry point of the program.
-        /// </summary>
-        /// <param name="args">The command line arguments.</param>
         public static async Task Main()
         {
+            // Configure Serilog to write log messages to the console and a file
+            LogToFile.Configure();
+
             // Read the bot token from the YAML file
             var deserializer = new DeserializerBuilder().Build();
             var config = deserializer.Deserialize<Config>(File.ReadAllText("config.yaml"));
@@ -31,7 +29,8 @@ namespace EvilBunny
                 TokenType = TokenType.Bot,
                 Intents = DiscordIntents.AllUnprivileged,
                 MinimumLogLevel = LogLevel.Information,
-                LogTimestampFormat = "dd MMM yyyy - hh:mm:ss tt"
+                LogTimestampFormat = "dd MMM yyyy - hh:mm:ss tt",
+                LoggerFactory = new SerilogLoggerFactory()
             });
 
             // Initialize the database
@@ -94,14 +93,8 @@ namespace EvilBunny
         }
     }
 
-    /// <summary>
-    /// The configuration class.
-    /// </summary>
     public class Config
     {
-        /// <summary>
-        /// Gets or sets the bot token.
-        /// </summary>
         public string Token { get; set; } = "";
     }
 }
