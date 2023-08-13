@@ -1,6 +1,6 @@
 using Serilog;
 
-namespace EvilBunny.Logs
+namespace EvilBunny
 {
     public static class LogToFile
     {

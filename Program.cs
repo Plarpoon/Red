@@ -6,7 +6,6 @@ using DSharpPlus.Interactivity.Extensions;
 using YamlDotNet.Serialization;
 using Microsoft.Extensions.Logging;
 using Serilog.Extensions.Logging;
-using EvilBunny.Logs;
 
 namespace EvilBunny
 {
