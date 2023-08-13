@@ -15,6 +15,9 @@ namespace EvilBunny
             connection.Open();
             discord.Logger.LogInformation("SQLite connection created successfully.");
 
+            // Begin a transaction
+            using var transaction = connection.BeginTransaction();
+
             // Create the guilds table
             discord.Logger.LogInformation("Creating guilds table...");
             var createGuildsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS guilds (guild_id TEXT PRIMARY KEY, guild_name TEXT)", connection);
@@ -23,13 +26,13 @@ namespace EvilBunny
 
             // Create the channels table
             discord.Logger.LogInformation("Creating channels table...");
-            var createChannelsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS channels (guild_id TEXT, channel_id TEXT, channel_name TEXT, PRIMARY KEY (guild_id, channel_id))", connection);
+            var createChannelsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS channels (guild_id TEXT, channel_id TEXT PRIMARY KEY, channel_name TEXT)", connection);
             createChannelsTableCommand.ExecuteNonQuery();
             discord.Logger.LogInformation("Channels table created successfully.");
 
             // Create the roles table
             discord.Logger.LogInformation("Creating roles table...");
-            var createRolesTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS roles (guild_id TEXT, role_id TEXT, role_name TEXT, PRIMARY KEY (guild_id, role_id))", connection);
+            var createRolesTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS roles (guild_id TEXT, role_id TEXT PRIMARY KEY, role_name TEXT)", connection);
             createRolesTableCommand.ExecuteNonQuery();
             discord.Logger.LogInformation("Roles table created successfully.");
 
@@ -41,21 +44,24 @@ namespace EvilBunny
 
             // Create the global_settings table
             discord.Logger.LogInformation("Creating global_settings table...");
-            var createGlobalSettingsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS global_settings (guild_id TEXT, key TEXT, value TEXT, PRIMARY KEY (guild_id, key))", connection);
+            var createGlobalSettingsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS global_settings (setting_id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT, key TEXT, value TEXT)", connection);
             createGlobalSettingsTableCommand.ExecuteNonQuery();
             discord.Logger.LogInformation("Global_settings table created successfully.");
 
             // Create the channel_settings table
             discord.Logger.LogInformation("Creating channel_settings table...");
-            var createChannelSettingsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS channel_settings (guild_id TEXT, key TEXT, value TEXT, channel_id TEXT, PRIMARY KEY (guild_id, key, channel_id))", connection);
+            var createChannelSettingsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS channel_settings (setting_id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT, key TEXT, value TEXT, channel_id TEXT)", connection);
             createChannelSettingsTableCommand.ExecuteNonQuery();
             discord.Logger.LogInformation("Channel_settings table created successfully.");
 
             // Create the user_settings table
             discord.Logger.LogInformation("Creating user_settings table...");
-            var createUserSettingsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS user_settings (guild_id TEXT, key TEXT, value TEXT, user_id TEXT, PRIMARY KEY (guild_id, key, user_id))", connection);
+            var createUserSettingsTableCommand = new SQLiteCommand("CREATE TABLE IF NOT EXISTS user_settings (setting_id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT, key TEXT, value TEXT, user_id TEXT)", connection);
             createUserSettingsTableCommand.ExecuteNonQuery();
             discord.Logger.LogInformation("User_settings table created successfully.");
+
+            // Commit the transaction
+            transaction.Commit();
         }
     }
 }
