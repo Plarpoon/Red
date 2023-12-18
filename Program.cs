@@ -1,8 +1,13 @@
+// System Libraries
 using System.Reflection;
+
+// Libraries for DSharpPlus
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.Interactivity.Extensions;
+
+// Libraries for YAML and Logging
 using YamlDotNet.Serialization;
 using Microsoft.Extensions.Logging;
 using Serilog.Extensions.Logging;
@@ -11,6 +16,8 @@ namespace EvilBunny
 {
     public class Program
     {
+        private static readonly string[] prefix = ["!"];
+
         public static async Task Main()
         {
             // Configure Serilog to write log messages to the console and a file
@@ -45,7 +52,7 @@ namespace EvilBunny
             // Register the CommandsNext module
             var commands = discord.UseCommandsNext(new CommandsNextConfiguration
             {
-                StringPrefixes = new[] { "!" }
+                StringPrefixes = prefix
             });
 
             // Register the SlashCommands module
