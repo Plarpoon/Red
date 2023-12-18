@@ -33,7 +33,7 @@ namespace EvilBunny
             {
                 Token = token,
                 TokenType = TokenType.Bot,
-                Intents = DiscordIntents.AllUnprivileged,
+                Intents = DiscordIntents.Guilds | DiscordIntents.AllUnprivileged,
                 MinimumLogLevel = LogLevel.Information,
                 LogTimestampFormat = "dd MMM yyyy - hh:mm:ss tt",
                 LoggerFactory = new SerilogLoggerFactory()

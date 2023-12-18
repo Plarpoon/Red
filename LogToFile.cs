@@ -13,7 +13,7 @@ namespace EvilBunny
                     path: "Logs/EvilLog-" + DateTime.Now.ToString("hhmm-") + ".log",
                     rollingInterval: RollingInterval.Day,
                     outputTemplate: "{Timestamp:dd-MM-yyyy HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
-                    retainedFileCountLimit: null,
+                    retainedFileCountLimit: 3,  // Keep only the last 3 files
                     shared: true)
                 .CreateLogger();
         }
