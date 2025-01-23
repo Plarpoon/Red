@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use red::config::Config;
+    use red::bot::utils::config::Config;
     use std::fs;
     use toml::Value;
 
