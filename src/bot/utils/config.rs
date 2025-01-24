@@ -50,7 +50,7 @@ impl Config {
     pub async fn load_or_create_and_validate_async() -> Result<Self, Box<dyn std::error::Error>> {
         let config_path = Path::new("config.toml");
 
-        // If the file doesn't exist, create a default config (async).
+        // If the file doesn't exist, create a default config.
         if !config_path.exists() {
             Self::create_default_config_async(config_path).await?;
         }

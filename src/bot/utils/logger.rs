@@ -45,7 +45,7 @@ pub async fn init_logger_with_config(config: &Config) -> io::Result<WorkerGuard>
         }
     });
 
-    // Build the console layer (colorized pretty printing)
+    // Build the console layer
     let console_layer = tracing_subscriber::fmt::layer()
         .with_ansi(true)
         .with_filter(target_filter.clone());
@@ -64,8 +64,6 @@ pub async fn init_logger_with_config(config: &Config) -> io::Result<WorkerGuard>
 
     // Combine them into a single subscriber with layering
     tracing_subscriber::registry()
-        // We can optionally override with an EnvFilter, but we'll rely on our custom filter above.
-        // .with(EnvFilter::from_default_env())
         .with(console_layer)
         .with(file_layer)
         .init();
@@ -83,7 +81,7 @@ async fn ensure_log_directory_exists(dir: &str) -> io::Result<()> {
     Ok(())
 }
 
-/// Maps your string to a tracing `Level`.
+/// Maps string to a tracing `Level`.
 /// "trace" is the lowest, "error" is the highest severity only, etc.
 fn parse_log_level(level_str: &str) -> tracing::Level {
     match level_str.to_lowercase().as_str() {
@@ -96,7 +94,6 @@ fn parse_log_level(level_str: &str) -> tracing::Level {
     }
 }
 
-// Below are your old convenience methods, but for `tracing`:
 pub fn log_critical(message: &str) {
     error!("{}", message);
 }

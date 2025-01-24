@@ -7,14 +7,14 @@ use serenity::Client;
 
 #[tokio::main]
 async fn main() {
-    // --- 1. Load config (async) ---
+    // --- 1. Load config ---
     logger::log_debug("Initializing logger and configuration.");
 
     let config = Config::load_or_create_and_validate_async()
         .await
         .expect("Failed to load or create config");
 
-    // --- 2. Init tracing-based logger (async) ---
+    // --- 2. Init tracing-based logger ---
     // The returned guard ensures logs are flushed before exit
     let _guard = logger::init_logger_with_config(&config)
         .await
