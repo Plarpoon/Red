@@ -4,14 +4,16 @@ use std::path::Path;
 use tokio::fs;
 use tracing::{debug, error, info, trace, warn};
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{filter::filter_fn, layer::SubscriberExt, util::SubscriberInitExt, Layer};
+use tracing_subscriber::{
+    filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt, Layer,
+};
 
 /// Initializes the logger asynchronously:
 ///  1. Ensures the log directory exists
 ///  2. Sets up a global tracing subscriber with:
 ///     - A console layer (colorized)
 ///     - A file layer (JSON lines, async buffered)
-///     - A custom filter to handle "internal"/"external"/"both" & log level
+///  3. Applies only the log-level filter (no internal/external distinction)
 ///
 /// Returns a `WorkerGuard` that must be kept alive to ensure logs are flushed.
 pub async fn init_logger_with_config(config: &Config) -> io::Result<WorkerGuard> {
@@ -22,54 +24,29 @@ pub async fn init_logger_with_config(config: &Config) -> io::Result<WorkerGuard>
     let file_appender = tracing_appender::rolling::never(log_folder, "bot.log");
     let (file_writer, guard) = tracing_appender::non_blocking(file_appender);
 
-    // Determine the maximum level from config
+    // Convert our string to a `LevelFilter` for tracing
     let level_filter = parse_log_level(&config.logging.log_level);
 
-    // Create a filter function for internal/external/both
-    let filter_clone = config.logging.log_filter.to_lowercase();
-    let target_filter = filter_fn(move |metadata| {
-        // 1. Check level
-        if metadata.level() > &level_filter {
-            return false;
-        }
-
-        // 2. Check "internal"/"external" vs. target
-        let is_external = metadata.target().starts_with("red::");
-        match filter_clone.as_str() {
-            "external" => is_external,
-            "internal" => !is_external,
-            // "both" => no filtering based on target
-            "both" => true,
-            // fallback
-            _ => true,
-        }
-    });
-
-    // Build the console layer
+    // Build a console layer (colorized)
     let console_layer = tracing_subscriber::fmt::layer()
         .with_ansi(true)
-        .with_filter(target_filter.clone());
+        .with_filter(level_filter);
 
-    // Build the file layer (JSON output)
+    // Build a file layer (JSON output)
     let file_layer = tracing_subscriber::fmt::layer()
         .json()
         .with_ansi(false)
         .with_writer(file_writer)
-        .with_filter(target_filter);
-
-    // Optionally, add time formatting or other config
-    // e.g. .with_timer(...)
-    // .with_timer(OffsetTime::local_rfc_3339().unwrap_or_else(|_| OffsetTime::local()))
-    // If local offset time fails, fallback to UTC, etc.
+        .with_filter(level_filter);
 
     // Combine them into a single subscriber with layering
     tracing_subscriber::registry()
+        // Could also add an EnvFilter, e.g. EnvFilter::from_default_env()
         .with(console_layer)
         .with(file_layer)
         .init();
 
-    // We hold onto "guard" so logs are flushed before exit
-    info!("Tracing-based async logger initialized successfully.");
+    info!("logger initialized successfully.");
     Ok(guard)
 }
 
@@ -81,19 +58,21 @@ async fn ensure_log_directory_exists(dir: &str) -> io::Result<()> {
     Ok(())
 }
 
-/// Maps string to a tracing `Level`.
-/// "trace" is the lowest, "error" is the highest severity only, etc.
-fn parse_log_level(level_str: &str) -> tracing::Level {
+/// Convert the user config's log_level string into a `tracing_subscriber::filter::LevelFilter`.
+fn parse_log_level(level_str: &str) -> LevelFilter {
     match level_str.to_lowercase().as_str() {
-        "error" => tracing::Level::ERROR,
-        "warn" => tracing::Level::WARN,
-        "info" => tracing::Level::INFO,
-        "debug" => tracing::Level::DEBUG,
-        "trace" => tracing::Level::TRACE,
-        _ => tracing::Level::TRACE, // fallback
+        "error" => LevelFilter::ERROR,
+        "warn" => LevelFilter::WARN,
+        "info" => LevelFilter::INFO,
+        "debug" => LevelFilter::DEBUG,
+        "trace" => LevelFilter::TRACE,
+        _ => LevelFilter::TRACE, // fallback
     }
 }
 
+// -----------------------------------------------------------------
+// Convenience log methods using tracing macros
+// -----------------------------------------------------------------
 pub fn log_critical(message: &str) {
     error!("{}", message);
 }

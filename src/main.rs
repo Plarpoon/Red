@@ -7,15 +7,15 @@ use serenity::Client;
 
 #[tokio::main]
 async fn main() {
+    logger::log_trace("Starting bot.");
+
     // --- 1. Load config ---
     logger::log_debug("Initializing logger and configuration.");
-
     let config = Config::load_or_create_and_validate_async()
         .await
         .expect("Failed to load or create config");
 
     // --- 2. Init tracing-based logger ---
-    // The returned guard ensures logs are flushed before exit
     let _guard = logger::init_logger_with_config(&config)
         .await
         .expect("Failed to init async logger");
@@ -38,6 +38,19 @@ async fn main() {
 
     // --- 4. Start the bot ---
     if let Err(why) = client.start().await {
-        logger::log_error(&format!("Client error: {:?}", why));
+        // Convert the error to a String for easy inspection
+        let error_msg = format!("{:?}", why);
+
+        // Check for possible network/offline indicators
+        if error_msg.contains("connection refused")
+            || error_msg.contains("network unreachable")
+            || error_msg.contains("timed out")
+        {
+            logger::log_critical(
+                "Discord servers appear to be offline or unreachable! Critical error.",
+            );
+        }
+
+        logger::log_error(&format!("Client error: {error_msg}"));
     }
 }

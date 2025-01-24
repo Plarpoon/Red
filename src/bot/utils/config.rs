@@ -18,15 +18,15 @@ pub struct RedConfig {
     pub shards: u64,
 }
 
+/// Sub-configuration for logging
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LoggingConfig {
     #[serde(rename = "log-level")]
     pub log_level: String,
-    #[serde(rename = "log-filter")]
-    pub log_filter: String,
     pub directory: String,
 }
 
+/// Sub-configuration for log rotation
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LogRotateConfig {
     pub frequency: String,
@@ -38,7 +38,6 @@ impl Config {
             red: RedConfig { token, shards },
             logging: LoggingConfig {
                 log_level: "info".to_string(),
-                log_filter: "both".to_string(),
                 directory: "logs".to_string(),
             },
             logrotate: LogRotateConfig {
@@ -47,6 +46,7 @@ impl Config {
         }
     }
 
+    /// Loads the config asynchronously, creating a default if not found.
     pub async fn load_or_create_and_validate_async() -> Result<Self, Box<dyn std::error::Error>> {
         let config_path = Path::new("config.toml");
 
@@ -80,7 +80,6 @@ impl Config {
     fn validate(&self) {
         self.validate_token();
         self.validate_log_level();
-        self.validate_log_filter();
     }
 
     fn validate_token(&self) {
@@ -95,16 +94,6 @@ impl Config {
             "info" | "debug" | "trace" | "warn" | "error" => {}
             _ => {
                 logger::log_error("The 'log-level' field in 'config.toml' is not valid. Please use one of: 'info', 'debug', 'trace', 'warn', 'error'.");
-                std::process::exit(1);
-            }
-        }
-    }
-
-    fn validate_log_filter(&self) {
-        match self.logging.log_filter.to_lowercase().as_str() {
-            "internal" | "external" | "both" => {}
-            _ => {
-                logger::log_error("The 'log-filter' field in 'config.toml' is not valid. Please use one of: 'internal', 'external', 'both'.");
                 std::process::exit(1);
             }
         }
