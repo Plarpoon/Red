@@ -1,26 +1,24 @@
 use crate::bot::utils::logger;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::Path;
-use toml::{self};
+use tokio::fs;
+use toml;
 
 /// Main configuration struct holding top-level sections.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub red: RedConfig,
     pub logging: LoggingConfig,
     pub logrotate: LogRotateConfig,
 }
 
-/// Sub-configuration defining the 'red' bot settings.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RedConfig {
     pub token: String,
     pub shards: u64,
 }
 
-/// Sub-configuration for logging
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LoggingConfig {
     #[serde(rename = "log-level")]
     pub log_level: String,
@@ -29,8 +27,7 @@ pub struct LoggingConfig {
     pub directory: String,
 }
 
-/// Sub-configuration for log rotation
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LogRotateConfig {
     pub frequency: String,
 }
@@ -41,7 +38,6 @@ impl Config {
             red: RedConfig { token, shards },
             logging: LoggingConfig {
                 log_level: "info".to_string(),
-                // We can still default to "both" if we want everything by default.
                 log_filter: "both".to_string(),
                 directory: "logs".to_string(),
             },
@@ -51,27 +47,30 @@ impl Config {
         }
     }
 
-    pub fn load_or_create_and_validate() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn load_or_create_and_validate_async() -> Result<Self, Box<dyn std::error::Error>> {
         let config_path = Path::new("config.toml");
 
+        // If the file doesn't exist, create a default config (async).
         if !config_path.exists() {
-            Self::create_default_config(config_path)?;
+            Self::create_default_config_async(config_path).await?;
         }
 
-        let contents = fs::read_to_string(config_path)?;
+        let contents = fs::read_to_string(config_path).await?;
         let parsed: Config = toml::from_str(&contents)?;
 
         parsed.validate();
-
         Ok(parsed)
     }
 
-    fn create_default_config(config_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    async fn create_default_config_async(
+        config_path: &Path,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         logger::log_warn(
             "Configuration file 'config.toml' not found. Creating a new one with default values.",
         );
         let default_config = Self::new("placeholder_token".to_string(), 1);
-        fs::write(config_path, toml::to_string_pretty(&default_config)?)?;
+        let toml_str = toml::to_string_pretty(&default_config)?;
+        fs::write(config_path, toml_str).await?;
         logger::log_error(
             "A new 'config.toml' has been created. Please update the 'token' field with your actual Discord bot token."
         );

@@ -1,132 +1,102 @@
-use chrono::Local;
-use env_logger::Builder;
-use log::{debug, error, info, trace, warn, Level, LevelFilter, Record};
-use std::fs::{create_dir_all, OpenOptions};
-use std::io::Write;
-use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-
 use crate::bot::utils::config::Config;
+use std::io;
+use std::path::Path;
+use tokio::fs;
+use tracing::{debug, error, info, trace, warn};
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::{filter::filter_fn, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
-/// Initializes the logging directory.
-fn setup_log_directory(log_folder: &str) {
-    if let Err(e) = create_dir_all(log_folder) {
-        eprintln!("Failed to create logs directory '{}': {}", log_folder, e);
-        std::process::exit(1);
-    }
-}
-
-/// Opens or creates the log file.
-fn open_log_file(log_file_path: &str) -> std::fs::File {
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_file_path)
-        .unwrap_or_else(|e| {
-            eprintln!(
-                "Failed to open or create log file '{}': {}",
-                log_file_path, e
-            );
-            std::process::exit(1);
-        })
-}
-
-/// Determines if a record should be displayed based on the filter.
-fn should_display_record(filter: &str, record: &Record) -> bool {
-    let is_external = record.target().starts_with("red::");
-
-    match filter.to_lowercase().as_str() {
-        "external" => is_external,
-        "internal" => !is_external,
-        "both" => true,
-        _ => true, // Fallback to showing all logs
-    }
-}
-
-/// Configures and initializes the logger.
-pub fn init_logger_with_config(config: &Config) {
+/// Initializes the logger asynchronously:
+///  1. Ensures the log directory exists
+///  2. Sets up a global tracing subscriber with:
+///     - A console layer (colorized)
+///     - A file layer (JSON lines, async buffered)
+///     - A custom filter to handle "internal"/"external"/"both" & log level
+///
+/// Returns a `WorkerGuard` that must be kept alive to ensure logs are flushed.
+pub async fn init_logger_with_config(config: &Config) -> io::Result<WorkerGuard> {
     let log_folder = &config.logging.directory;
-    setup_log_directory(log_folder);
+    ensure_log_directory_exists(log_folder).await?;
 
-    let log_file_path = format!("{}/bot.log", log_folder);
-    let log_file = open_log_file(&log_file_path);
+    // Create a non-blocking writer for "bot.log" in the specified directory
+    let file_appender = tracing_appender::rolling::never(log_folder, "bot.log");
+    let (file_writer, guard) = tracing_appender::non_blocking(file_appender);
 
-    let level_filter = match config.logging.log_level.to_lowercase().as_str() {
-        "critical" => LevelFilter::Error,
-        "error" => LevelFilter::Error,
-        "warn" => LevelFilter::Warn,
-        "info" => LevelFilter::Info,
-        "debug" => LevelFilter::Debug,
-        "trace" | _ => LevelFilter::Trace,
-    };
+    // Determine the maximum level from config
+    let level_filter = parse_log_level(&config.logging.log_level);
 
-    let log_filter = config.logging.log_filter.clone();
-
-    let mut builder = Builder::new();
-
-    builder.filter(None, level_filter).format(move |_, record| {
-        if !should_display_record(&log_filter, record) {
-            return Ok(());
+    // Create a filter function for internal/external/both
+    let filter_clone = config.logging.log_filter.to_lowercase();
+    let target_filter = filter_fn(move |metadata| {
+        // 1. Check level
+        if metadata.level() > &level_filter {
+            return false;
         }
 
-        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
-        let level = record.level();
-
-        let mut displayed_target = record.target().to_owned();
-
-        if displayed_target.starts_with("serenity::") {
-            displayed_target = "[Serenity]".into();
-        } else if displayed_target.starts_with("red::") {
-            displayed_target = "[Red]".into();
+        // 2. Check "internal"/"external" vs. target
+        let is_external = metadata.target().starts_with("red::");
+        match filter_clone.as_str() {
+            "external" => is_external,
+            "internal" => !is_external,
+            // "both" => no filtering based on target
+            "both" => true,
+            // fallback
+            _ => true,
         }
-
-        let message = format!(
-            "[{}] [{}] {}: {}",
-            timestamp,
-            level,
-            displayed_target,
-            record.args()
-        );
-
-        let mut stdout = StandardStream::stdout(ColorChoice::Always);
-        let color = match level {
-            Level::Error => Color::Red,
-            Level::Warn => Color::Yellow,
-            Level::Info => Color::Green,
-            Level::Debug => Color::Cyan,
-            Level::Trace => Color::Blue,
-        };
-
-        let mut color_spec = ColorSpec::new();
-        color_spec.set_fg(Some(color)).set_bold(true);
-        stdout.set_color(&color_spec).ok();
-        write!(stdout, "{}", message).ok();
-        stdout.reset().ok();
-        writeln!(stdout).ok();
-
-        let mut file = log_file
-            .try_clone()
-            .expect("Failed to clone log file handle");
-        writeln!(
-            file,
-            "{{\"timestamp\":\"{}\",\"level\":\"{}\",\"target\":\"{}\",\"message\":\"{}\"}}",
-            timestamp,
-            level,
-            displayed_target,
-            record.args()
-        )
-        .ok();
-
-        Ok(())
     });
 
-    builder.init();
+    // Build the console layer (colorized pretty printing)
+    let console_layer = tracing_subscriber::fmt::layer()
+        .with_ansi(true)
+        .with_filter(target_filter.clone());
 
-    info!("Logger initialized successfully.");
+    // Build the file layer (JSON output)
+    let file_layer = tracing_subscriber::fmt::layer()
+        .json()
+        .with_ansi(false)
+        .with_writer(file_writer)
+        .with_filter(target_filter);
+
+    // Optionally, add time formatting or other config
+    // e.g. .with_timer(...)
+    // .with_timer(OffsetTime::local_rfc_3339().unwrap_or_else(|_| OffsetTime::local()))
+    // If local offset time fails, fallback to UTC, etc.
+
+    // Combine them into a single subscriber with layering
+    tracing_subscriber::registry()
+        // We can optionally override with an EnvFilter, but we'll rely on our custom filter above.
+        // .with(EnvFilter::from_default_env())
+        .with(console_layer)
+        .with(file_layer)
+        .init();
+
+    // We hold onto "guard" so logs are flushed before exit
+    info!("Tracing-based async logger initialized successfully.");
+    Ok(guard)
 }
 
-//------------------------------------------------------------------
-// Convenience log methods:
-//------------------------------------------------------------------
+/// Convenience function to ensure the logs directory exists (async).
+async fn ensure_log_directory_exists(dir: &str) -> io::Result<()> {
+    if !Path::new(dir).exists() {
+        fs::create_dir_all(dir).await?;
+    }
+    Ok(())
+}
+
+/// Maps your string to a tracing `Level`.
+/// "trace" is the lowest, "error" is the highest severity only, etc.
+fn parse_log_level(level_str: &str) -> tracing::Level {
+    match level_str.to_lowercase().as_str() {
+        "error" => tracing::Level::ERROR,
+        "warn" => tracing::Level::WARN,
+        "info" => tracing::Level::INFO,
+        "debug" => tracing::Level::DEBUG,
+        "trace" => tracing::Level::TRACE,
+        _ => tracing::Level::TRACE, // fallback
+    }
+}
+
+// Below are your old convenience methods, but for `tracing`:
 pub fn log_critical(message: &str) {
     error!("{}", message);
 }
