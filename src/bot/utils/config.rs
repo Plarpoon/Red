@@ -12,6 +12,7 @@ pub struct Config {
     pub logrotate: LogRotateConfig,
 }
 
+/// Sub-configuration for the bot's token and shard count.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RedConfig {
     pub token: String,
@@ -32,6 +33,7 @@ pub struct LogRotateConfig {
     pub frequency: String,
 }
 
+/// Implementation of the Config struct.
 impl Config {
     pub fn new(token: String, shards: u64) -> Self {
         Self {
@@ -55,13 +57,16 @@ impl Config {
             Self::create_default_config_async(config_path).await?;
         }
 
+        // Read the file and parse the contents.
         let contents = fs::read_to_string(config_path).await?;
         let parsed: Config = toml::from_str(&contents)?;
 
+        // Validate the parsed config.
         parsed.validate();
         Ok(parsed)
     }
 
+    /// Creates a default config file with placeholder values.
     async fn create_default_config_async(
         config_path: &Path,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -77,11 +82,13 @@ impl Config {
         std::process::exit(1);
     }
 
+    /// Validates the config struct, checking for placeholder values.
     fn validate(&self) {
         self.validate_token();
         self.validate_log_level();
     }
 
+    /// Validates the token field in the config.
     fn validate_token(&self) {
         if self.red.token == "placeholder_token" {
             logger::log_error("The 'token' field in 'config.toml' is still set to 'placeholder_token'. Please replace it with your actual Discord bot token.");
@@ -89,6 +96,7 @@ impl Config {
         }
     }
 
+    /// Validates the log level field in the config.
     fn validate_log_level(&self) {
         match self.logging.log_level.to_lowercase().as_str() {
             "info" | "debug" | "trace" | "warn" | "error" => {}
