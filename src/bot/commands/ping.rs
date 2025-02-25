@@ -1,4 +1,4 @@
-use crate::bot::utils::logger;
+use log::{error, info};
 use serenity::model::channel::Message;
 use serenity::prelude::*;
 
@@ -6,9 +6,11 @@ use serenity::prelude::*;
 pub async fn handle_ping(ctx: &Context, msg: &Message) {
     if msg.content == "!ping" {
         if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
-            logger::log_error(&format!("Error sending message: {why:?}"));
+            /* Log an error if sending the message fails */
+            error!("Error sending message: {:?}", why);
         } else {
-            logger::log_info("Successfully sent 'Pong!' in response to '!ping' command.");
+            /* Log a success message if 'Pong!' was sent */
+            info!("Successfully sent 'Pong!' in response to '!ping' command.");
         }
     }
 }

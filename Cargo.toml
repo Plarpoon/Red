@@ -1,6 +1,6 @@
 [package]
 name = "red"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 edition = "2021"
 description = "A robust and versatile Discord bot developed using the Serenity library."
 license = "GPL-3.0-only WITH Commons-Clause-1.0"
@@ -11,13 +11,10 @@ publish = false
 [dependencies]
 serenity = { version = "0.12.4", features = ["full"] }
 tokio = { version = "1.43.0", features = ["full"] }
-serde = "1.0.217"
-toml = "0.8.19"
+serde = "1.0.218"
+toml = "0.8.20"
 chrono = "0.4.39"
-termcolor = "1.4.1"
-tracing = "0.1.41"
-tracing-appender = "0.2.3"
-tracing-subscriber = { version = "0.3.19", features = ["json"] }
-surrealdb = "2.1.4"
-
-[target.'cfg(target_arch = "x86_64")'.dependencies]
+log = "0.4.26"
+surrealdb = "2.2.1"
+colored = "3.0.0"
+fern = "0.7.1"

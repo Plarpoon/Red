@@ -1,93 +1,132 @@
 use crate::bot::utils::config::Config;
+use chrono::Local;
+use colored::*;
+use fern::Dispatch;
+use log::{Level, LevelFilter};
+use std::fs;
 use std::io;
 use std::path::Path;
-use tokio::fs;
-use tracing::{debug, error, info, trace, warn};
-use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{
-    filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt, Layer,
-};
+use tokio::spawn;
 
-/// Initializes the logger asynchronously:
-///  1. Ensures the log directory exists
-///  2. Sets up a global tracing subscriber with:
-///     - A console layer (colorized)
-///     - A file layer (JSON lines, async buffered)
-///  3. Applies only the log-level filter (no internal/external distinction)
-///
-/// Returns a `WorkerGuard` that must be kept alive to ensure logs are flushed.
-pub async fn init_logger_with_config(config: &Config) -> io::Result<WorkerGuard> {
-    let log_folder = &config.logging.directory;
-    ensure_log_directory_exists(log_folder).await?;
+/* Initializes the logger using the provided configuration.
+   Sets up a console logger and a file logger for bot-related logs.
+   When "hide serenity logs" is true, logs with target "serenity" are filtered out from
+   the main channels and instead written to a separate file.
+   Also schedules log rotation (if enabled) by spawning an asynchronous task.
+*/
+pub fn init_logger(config: &Config) -> Result<(), fern::InitError> {
+    let log_level: LevelFilter = config
+        .logging
+        .log_level
+        .parse()
+        .unwrap_or(LevelFilter::Info);
 
-    // Create a non-blocking writer for "bot.log" in the specified directory
-    let file_appender = tracing_appender::rolling::never(log_folder, "bot.log");
-    let (file_writer, guard) = tracing_appender::non_blocking(file_appender);
+    /* Create a log directory based on today's date using the configured base directory. */
+    let log_dir = create_log_directory(&config.logging.directory)?;
+    let log_file_path = format!("{}/bot.log", log_dir);
 
-    // Convert our string to a `LevelFilter` for tracing
-    let level_filter = parse_log_level(&config.logging.log_level);
+    /* Define the console log format with ANSI colors. */
+    let console_format =
+        |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &log::Record| {
+            let level_color = colorize_level(record.level());
+            out.finish(format_args!(
+                "{} [{}] {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                level_color,
+                message
+            ))
+        };
 
-    // Build a console layer (colorized)
-    let console_layer = tracing_subscriber::fmt::layer()
-        .with_ansi(true)
-        .with_filter(level_filter);
+    /* Define the file log format without ANSI colors. */
+    let file_format =
+        |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &log::Record| {
+            out.finish(format_args!(
+                "{} [{}] {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.level(),
+                message
+            ))
+        };
 
-    // Build a file layer (JSON output)
-    let file_layer = tracing_subscriber::fmt::layer()
-        .json()
-        .with_ansi(false)
-        .with_writer(file_writer)
-        .with_filter(level_filter);
+    let hide_serenity = config.logging.hide_serenity_logs;
 
-    // Combine them into a single subscriber with layering
-    tracing_subscriber::registry()
-        // Could also add an EnvFilter, e.g. EnvFilter::from_default_env()
-        .with(console_layer)
-        .with(file_layer)
-        .init();
+    /* Build the base dispatch, filtering out serenity logs from the main channels if requested */
+    let base_dispatch = Dispatch::new().level(log_level).filter(move |metadata| {
+        if hide_serenity {
+            metadata.target() != "serenity"
+        } else {
+            true
+        }
+    });
 
-    info!("logger initialized successfully.");
-    Ok(guard)
-}
+    let file_dispatch = Dispatch::new()
+        .format(file_format)
+        .chain(fern::log_file(&log_file_path)?)
+        .level(log_level);
 
-/// Convenience function to ensure the logs directory exists (async).
-async fn ensure_log_directory_exists(dir: &str) -> io::Result<()> {
-    if !Path::new(dir).exists() {
-        fs::create_dir_all(dir).await?;
+    let console_dispatch = Dispatch::new()
+        .format(console_format)
+        .chain(std::io::stdout())
+        .level(log_level);
+
+    let mut dispatch = base_dispatch.chain(file_dispatch).chain(console_dispatch);
+
+    /* If hide_serenity is true, add an additional dispatch for serenity logs */
+    if hide_serenity {
+        let serenity_file = format!("{}/serenity.log", log_dir);
+        let serenity_dispatch = Dispatch::new()
+            .filter(|metadata| metadata.target() == "serenity")
+            .format(file_format)
+            .chain(fern::log_file(&serenity_file)?)
+            .level(log_level);
+        dispatch = dispatch.chain(serenity_dispatch);
     }
+
+    dispatch.apply()?;
+
+    /* Schedule log rotation if enabled */
+    if let Some(freq_days) = parse_rotation_frequency(&config.logrotate.frequency) {
+        let log_dir = config.logging.directory.clone();
+        spawn(async move {
+            crate::bot::utils::logrotate::schedule_log_rotation(&log_dir, freq_days, "03:00").await;
+        });
+    }
+
     Ok(())
 }
 
-/// Convert the user config's log_level string into a `tracing_subscriber::filter::LevelFilter`.
-fn parse_log_level(level_str: &str) -> LevelFilter {
-    match level_str.to_lowercase().as_str() {
-        "error" => LevelFilter::ERROR,
-        "warn" => LevelFilter::WARN,
-        "info" => LevelFilter::INFO,
-        "debug" => LevelFilter::DEBUG,
-        "trace" => LevelFilter::TRACE,
-        _ => LevelFilter::TRACE, // fallback
+/* Creates a log directory based on the current date.
+   Returns the full path to the directory.
+*/
+fn create_log_directory(base_dir: &str) -> io::Result<String> {
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    let log_dir = format!("{}/{}", base_dir, today);
+    if !Path::new(&log_dir).exists() {
+        fs::create_dir_all(&log_dir)?;
+    }
+    Ok(log_dir)
+}
+
+/* Returns a colored version of the log level.
+   Uses the colored crate to add ANSI color codes.
+*/
+pub fn colorize_level(level: Level) -> ColoredString {
+    match level {
+        Level::Error => "ERROR".red().bold(),
+        Level::Warn => "WARN".yellow().bold(),
+        Level::Info => "INFO".green().bold(),
+        Level::Debug => "DEBUG".blue().bold(),
+        Level::Trace => "TRACE".cyan().bold(),
     }
 }
 
-// -----------------------------------------------------------------
-// Convenience log methods using tracing macros
-// -----------------------------------------------------------------
-pub fn log_critical(message: &str) {
-    error!("{}", message);
-}
-pub fn log_error(message: &str) {
-    error!("{}", message);
-}
-pub fn log_warn(message: &str) {
-    warn!("{}", message);
-}
-pub fn log_info(message: &str) {
-    info!("{}", message);
-}
-pub fn log_debug(message: &str) {
-    debug!("{}", message);
-}
-pub fn log_trace(message: &str) {
-    trace!("{}", message);
+/* Parses a rotation frequency string formatted as "Xd" (e.g. "7d") into a u64 number of days.
+   Returns Some(u64) if parsing succeeds; otherwise, returns None.
+*/
+fn parse_rotation_frequency(frequency: &str) -> Option<u64> {
+    if frequency.ends_with('d') {
+        frequency[..frequency.len() - 1].parse::<u64>().ok()
+    } else {
+        frequency.parse::<u64>().ok()
+    }
 }

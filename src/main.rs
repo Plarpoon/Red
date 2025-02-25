@@ -1,56 +1,67 @@
 mod bot;
 
 use bot::events::handlers::Handler;
-use bot::utils::{config::Config, logger};
+use bot::utils::config::Config;
+use bot::utils::logger;
+
+use log::{debug, error, info};
 use serenity::prelude::*;
 use serenity::Client;
+use std::process;
 
 #[tokio::main]
 async fn main() {
-    logger::log_trace("Starting bot.");
+    /* Asynchronously load and validate the configuration */
+    let config = match Config::load_or_create_and_validate_async().await {
+        Ok(cfg) => {
+            debug!("Configuration loaded successfully.");
+            cfg
+        }
+        Err(e) => {
+            eprintln!("Error loading configuration: {:?}", e);
+            process::exit(1);
+        }
+    };
 
-    // --- 1. Load config ---
-    logger::log_debug("Initializing logger and configuration.");
-    let config = Config::load_or_create_and_validate_async()
-        .await
-        .expect("Failed to load or create config");
+    /* Initialize the logger using the configuration; exit if initialization fails */
+    if let Err(e) = logger::init_logger(&config) {
+        eprintln!("Failed to initialize logger: {:?}", e);
+        process::exit(1);
+    }
 
-    // --- 2. Init tracing-based logger ---
-    let _guard = logger::init_logger_with_config(&config)
-        .await
-        .expect("Failed to init async logger");
-    logger::log_debug("Logger initialized successfully.");
+    info!("Starting bot.");
 
-    // --- 3. Set up client ---
+    /* Retrieve the Discord bot token from the configuration */
     let token = &config.red.token;
-    logger::log_debug("Discord bot token retrieved.");
+    info!("Discord bot token retrieved.");
 
+    /* Configure gateway intents */
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
-    logger::log_debug("Gateway intents configured.");
+    info!("Gateway intents configured.");
 
-    let mut client = Client::builder(token, intents)
-        .event_handler(Handler)
-        .await
-        .expect("Error creating client");
-    logger::log_debug("Client successfully created.");
+    /* Build the Discord client with the event handler */
+    let mut client = match Client::builder(token, intents).event_handler(Handler).await {
+        Ok(client) => {
+            info!("Client successfully created.");
+            client
+        }
+        Err(e) => {
+            error!("Error creating client: {:?}", e);
+            process::exit(1);
+        }
+    };
 
-    // --- 4. Start the bot ---
+    /* Start the client and log any errors that occur */
     if let Err(why) = client.start().await {
-        // Convert the error to a String for easy inspection
         let error_msg = format!("{:?}", why);
-
-        // Check for possible network/offline indicators
         if error_msg.contains("connection refused")
             || error_msg.contains("network unreachable")
             || error_msg.contains("timed out")
         {
-            logger::log_critical(
-                "Discord servers appear to be offline or unreachable! Critical error.",
-            );
+            error!("Discord servers appear to be offline or unreachable! Critical error.");
         }
-
-        logger::log_error(&format!("Client error: {error_msg}"));
+        error!("Client error: {}", error_msg);
     }
 }
