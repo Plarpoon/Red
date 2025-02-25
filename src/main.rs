@@ -4,30 +4,27 @@ use bot::events::handlers::Handler;
 use bot::utils::config::Config;
 use bot::utils::logger;
 
-use log::{debug, error, info};
+use log::{error, info, warn};
 use serenity::prelude::*;
 use serenity::Client;
 use std::process;
 
 #[tokio::main]
 async fn main() {
-    /* Asynchronously load and validate the configuration */
-    let config = match Config::load_or_create_and_validate_async().await {
-        Ok(cfg) => {
-            debug!("Configuration loaded successfully.");
-            cfg
-        }
-        Err(e) => {
-            eprintln!("Error loading configuration: {:?}", e);
+    /* Load and validate the configuration or exit if an error occurs */
+    let config = Config::load_or_create_and_validate_async()
+        .await
+        .unwrap_or_else(|e| {
+            warn!("Failed to load configuration: {:?}", e);
+            eprintln!("{:?}", e);
             process::exit(1);
-        }
-    };
+        });
 
-    /* Initialize the logger using the configuration; exit if initialization fails */
-    if let Err(e) = logger::init_logger(&config) {
+    /* Initialize the logger using the configuration */
+    logger::init_logger(&config).unwrap_or_else(|e| {
         eprintln!("Failed to initialize logger: {:?}", e);
         process::exit(1);
-    }
+    });
 
     info!("Starting bot.");
 
@@ -42,16 +39,13 @@ async fn main() {
     info!("Gateway intents configured.");
 
     /* Build the Discord client with the event handler */
-    let mut client = match Client::builder(token, intents).event_handler(Handler).await {
-        Ok(client) => {
-            info!("Client successfully created.");
-            client
-        }
-        Err(e) => {
+    let mut client = Client::builder(token, intents)
+        .event_handler(Handler)
+        .await
+        .unwrap_or_else(|e| {
             error!("Error creating client: {:?}", e);
             process::exit(1);
-        }
-    };
+        });
 
     /* Start the client and log any errors that occur */
     if let Err(why) = client.start().await {

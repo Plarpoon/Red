@@ -1,11 +1,9 @@
 use log::{error, warn};
-
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tokio::fs;
 use toml;
 
-/* Main configuration struct holding top-level sections */
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct Config {
@@ -79,47 +77,35 @@ impl Default for LogRotateConfig {
 
 impl Config {
     /*
-       Asynchronously loads the configuration file from "config.toml".
-       If the file does not exist, it is created with default values.
-       The file is then reserialized to remove any extraneous keys and
-       ensure that all required sections are present (using defaults where needed).
-       Finally, the configuration is validated.
+       Asynchronously loads the configuration from "config.toml".
+       If the file is missing, it is created with default values.
+       Then, extra keys are removed by reserializing the config,
+       and the configuration is validated.
     */
     pub async fn load_or_create_and_validate_async() -> Result<Self, Box<dyn std::error::Error>> {
         let config_path = Path::new("config.toml");
 
-        /* Create a default config file if it does not exist */
         if !config_path.exists() {
             Self::create_default_config_async(config_path).await?;
         }
 
-        /* Read the file and parse its contents.
-           Any missing sections are filled in with defaults.
-        */
         let contents = fs::read_to_string(config_path).await?;
-        let config: Config = match toml::from_str(&contents) {
-            Ok(cfg) => cfg,
-            Err(err) => {
-                warn!(
-                    "Failed to parse {}: {}. Using defaults.",
-                    config_path.display(),
-                    err
-                );
-                Config::default()
-            }
-        };
+        let config: Self = toml::from_str(&contents).unwrap_or_else(|err| {
+            warn!(
+                "Failed to parse {}: {}. Using defaults.",
+                config_path.display(),
+                err
+            );
+            Self::default()
+        });
 
-        /* Write back a "clean" configuration (removing extra keys) */
-        let clean = toml::to_string_pretty(&config)?;
-        fs::write(config_path, clean).await?;
-
+        fs::write(config_path, toml::to_string_pretty(&config)?).await?;
         config.validate();
         Ok(config)
     }
 
     /*
-       Asynchronously creates a default configuration file with placeholder values.
-       Logs a warning and error message, then exits the process.
+       Asynchronously creates a default configuration file and exits the process.
     */
     async fn create_default_config_async(
         config_path: &Path,
@@ -128,7 +114,7 @@ impl Config {
             "Configuration file '{}' not found. Creating a new one with default values.",
             config_path.display()
         );
-        let default_config = Config::default();
+        let default_config = Self::default();
         let toml_str = toml::to_string_pretty(&default_config)?;
         fs::write(config_path, toml_str).await?;
         error!(
@@ -138,30 +124,16 @@ impl Config {
         std::process::exit(1);
     }
 
-    /* Validates the configuration by checking for placeholder values */
+    /* Validates the configuration by checking critical fields */
     fn validate(&self) {
-        self.validate_token();
-        self.validate_log_level();
-    }
-
-    /* Validates the token field.
-       Exits the process if the token is still set to the placeholder.
-    */
-    fn validate_token(&self) {
         if self.red.token == "placeholder_token" {
-            error!("The 'token' field in 'config.toml' is still set to 'placeholder_token'. Please replace it with your actual Discord bot token.");
+            error!("The 'token' field in 'config.toml' is still set to 'placeholder_token'. Please update it.");
             std::process::exit(1);
         }
-    }
-
-    /* Validates the log level field.
-       Exits the process if an invalid log level is provided.
-    */
-    fn validate_log_level(&self) {
         match self.logging.log_level.to_lowercase().as_str() {
             "info" | "debug" | "trace" | "warn" | "error" => {}
             _ => {
-                error!("The 'log-level' field in 'config.toml' is not valid. Please use one of: 'info', 'debug', 'trace', 'warn', 'error'.");
+                error!("Invalid 'log-level' in 'config.toml'. Use one of: 'info', 'debug', 'trace', 'warn', 'error'.");
                 std::process::exit(1);
             }
         }
