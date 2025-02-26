@@ -46,11 +46,50 @@ where
             Level::ERROR => colorize_level("error"),
         };
 
-        /* Get the target/module path */
-        let target = event.metadata().target();
+        /* Use fixed RED BOT identifiers instead of module path */
+        let red_tag = "[RED]".bright_red().bold();
+        let bot_tag = "[BOT]".bright_blue().bold();
 
-        /* Write the prefix first */
-        write!(writer, "{} {} [{}]: ", time, level_str, target)?;
+        /* Write the prefix with the new format */
+        write!(writer, "{} {} {} {}: ", time, level_str, red_tag, bot_tag)?;
+
+        /* Format the fields using the current API */
+        ctx.field_format().format_fields(writer.by_ref(), event)?;
+
+        /* End with a newline */
+        writeln!(writer)
+    }
+}
+
+/* Non-colorized formatter for log files that follows the same format as console logs */
+struct NonColorizedFormatter;
+
+impl<S, N> FormatEvent<S, N> for NonColorizedFormatter
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+    N: for<'a> FormatFields<'a> + 'static,
+{
+    fn format_event(
+        &self,
+        ctx: &FmtContext<'_, S, N>,
+        mut writer: Writer<'_>,
+        event: &tracing::Event<'_>,
+    ) -> std::fmt::Result {
+        /* Get the current time */
+        let now = Local::now();
+        let time = now.format("%Y-%m-%d %H:%M:%S");
+
+        /* Format the level without colorization */
+        let level = match *event.metadata().level() {
+            Level::TRACE => "[TRACE]",
+            Level::DEBUG => "[DEBUG]",
+            Level::INFO => "[INFO]",
+            Level::WARN => "[WARN]",
+            Level::ERROR => "[ERROR]",
+        };
+
+        /* Write the prefix with the new format */
+        write!(writer, "{} {} [RED] [BOT]: ", time, level)?;
 
         /* Format the fields using the current API */
         ctx.field_format().format_fields(writer.by_ref(), event)?;
@@ -105,6 +144,7 @@ pub async fn init_logger_with_config(config: &Config) -> io::Result<Vec<WorkerGu
 
     let bot_file_layer = tracing_subscriber::fmt::layer()
         .with_writer(bot_writer)
+        .event_format(NonColorizedFormatter) // Use our custom non-colored formatter
         .with_ansi(false)
         .with_filter(level_filter)
         .with_filter(filter_fn(|metadata| {
@@ -118,6 +158,7 @@ pub async fn init_logger_with_config(config: &Config) -> io::Result<Vec<WorkerGu
 
     let serenity_file_layer = tracing_subscriber::fmt::layer()
         .with_writer(serenity_writer)
+        .event_format(NonColorizedFormatter) // Use our custom non-colored formatter
         .with_ansi(false)
         .with_filter(LevelFilter::TRACE)
         .with_filter(filter_fn(|metadata| {
@@ -181,11 +222,11 @@ fn parse_log_level(level_str: &str) -> LevelFilter {
 /* Formats the log level with appropriate color */
 pub fn colorize_level(level: &str) -> colored::ColoredString {
     match level.to_lowercase().as_str() {
-        "error" => "ERROR".red().bold(),
-        "warn" => "WARN".yellow().bold(),
-        "info" => "INFO".green().bold(),
-        "debug" => "DEBUG".blue().bold(),
-        "trace" => "TRACE".cyan().bold(),
-        _ => level.normal(),
+        "error" => "[ERROR]".red().bold(),
+        "warn" => "[WARN]".yellow().bold(),
+        "info" => "[INFO]".green().bold(),
+        "debug" => "[DEBUG]".blue().bold(),
+        "trace" => "[TRACE]".cyan().bold(),
+        _ => format!("[{}]", level).normal(),
     }
 }
