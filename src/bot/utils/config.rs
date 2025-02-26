@@ -65,12 +65,26 @@ impl Default for LoggingConfig {
 #[serde(default)]
 pub struct LogRotateConfig {
     pub frequency: String,
+    pub rotation_time: String,
 }
 
 impl Default for LogRotateConfig {
     fn default() -> Self {
         Self {
             frequency: "7d".to_string(),
+            rotation_time: "00:00".to_string(),
+        }
+    }
+}
+
+impl LogRotateConfig {
+    pub fn parse_frequency(&self) -> u64 {
+        let freq = self.frequency.trim();
+        if let Some(days) = freq.strip_suffix('d') {
+            days.parse::<u64>().unwrap_or(7)
+        } else {
+            /* Try to parse as just days */
+            freq.parse::<u64>().unwrap_or(7)
         }
     }
 }

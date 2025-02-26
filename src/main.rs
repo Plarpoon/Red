@@ -21,10 +21,12 @@ async fn main() {
         });
 
     /* Initialize the logger using the configuration */
-    logger::init_logger(&config).unwrap_or_else(|e| {
-        eprintln!("Failed to initialize logger: {:?}", e);
-        process::exit(1);
-    });
+    let _guard = logger::init_logger_with_config(&config)
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("Failed to initialize logger: {:?}", e);
+            process::exit(1);
+        });
 
     info!("Starting bot.");
 

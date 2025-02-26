@@ -9,12 +9,28 @@ repository = "https://github.com/Plarpoon/Red"
 publish = false
 
 [dependencies]
+# Discord API
 serenity = { version = "0.12.4", features = ["full"] }
+
+# Async runtime
 tokio = { version = "1.43.0", features = ["full"] }
+
+# Data handling and serialization
 serde = "1.0.218"
 toml = "0.8.20"
-chrono = "0.4.39"
-log = "0.4.26"
+
+# Database
 surrealdb = "2.2.1"
-colored = "3.0.0"
+
+# Date and time
+chrono = "0.4.40"
+
+# Logging and tracing
 fern = "0.7.1"
+log = "0.4.26"
+tracing = "0.1.41"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.19", features = ["json"] }
+
+# Utilities
+colored = "3.0.0"
