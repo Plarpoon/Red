@@ -3,230 +3,116 @@ use crate::bot::utils::logrotate;
 
 use chrono::Local;
 use colored::Colorize;
+use fern::Dispatch;
+use log::{Level, LevelFilter, info};
+use std::fs;
 use std::io;
 use std::path::Path;
-use tokio::fs;
-use tokio::task;
-use tracing::{info, Level, Subscriber};
-use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{
-    filter::{filter_fn, LevelFilter},
-    fmt::{format::Writer, FmtContext, FormatEvent, FormatFields},
-    layer::SubscriberExt,
-    registry::LookupSpan,
-    util::SubscriberInitExt,
-    Layer,
-};
 
-/* Custom event formatter that uses our colorize_level function */
-struct ColorizedFormatter;
-
-impl<S, N> FormatEvent<S, N> for ColorizedFormatter
-where
-    S: Subscriber + for<'a> LookupSpan<'a>,
-    N: for<'a> FormatFields<'a> + 'static,
-{
-    fn format_event(
-        &self,
-        ctx: &FmtContext<'_, S, N>,
-        mut writer: Writer<'_>,
-        event: &tracing::Event<'_>,
-    ) -> std::fmt::Result {
-        /* Get the current time */
-        let now = Local::now();
-        let time = now.format("%Y-%m-%d %H:%M:%S");
-
-        /* Format the level with our colorized function */
-        let level = event.metadata().level();
-        let level_str = match *level {
-            Level::TRACE => colorize_level("trace"),
-            Level::DEBUG => colorize_level("debug"),
-            Level::INFO => colorize_level("info"),
-            Level::WARN => colorize_level("warn"),
-            Level::ERROR => colorize_level("error"),
-        };
-
-        /* Use fixed RED BOT identifiers instead of module path */
-        let red_tag = "[RED]".bright_red().bold();
-        let bot_tag = "[BOT]".bright_blue().bold();
-
-        /* Write the prefix with the new format */
-        write!(writer, "{} {} {} {}: ", time, level_str, red_tag, bot_tag)?;
-
-        /* Format the fields using the current API */
-        ctx.field_format().format_fields(writer.by_ref(), event)?;
-
-        /* End with a newline */
-        writeln!(writer)
-    }
-}
-
-/* Non-colorized formatter for log files that follows the same format as console logs */
-struct NonColorizedFormatter;
-
-impl<S, N> FormatEvent<S, N> for NonColorizedFormatter
-where
-    S: Subscriber + for<'a> LookupSpan<'a>,
-    N: for<'a> FormatFields<'a> + 'static,
-{
-    fn format_event(
-        &self,
-        ctx: &FmtContext<'_, S, N>,
-        mut writer: Writer<'_>,
-        event: &tracing::Event<'_>,
-    ) -> std::fmt::Result {
-        /* Get the current time */
-        let now = Local::now();
-        let time = now.format("%Y-%m-%d %H:%M:%S");
-
-        /* Format the level without colorization */
-        let level = match *event.metadata().level() {
-            Level::TRACE => "[TRACE]",
-            Level::DEBUG => "[DEBUG]",
-            Level::INFO => "[INFO]",
-            Level::WARN => "[WARN]",
-            Level::ERROR => "[ERROR]",
-        };
-
-        /* Write the prefix with the new format */
-        write!(writer, "{} {} [RED] [BOT]: ", time, level)?;
-
-        /* Format the fields using the current API */
-        ctx.field_format().format_fields(writer.by_ref(), event)?;
-
-        /* End with a newline */
-        writeln!(writer)
-    }
-}
-
-/* Initializes the logger asynchronously:
- *  1. Creates a timestamped log directory for today
- *  2. Sets up tracing subscribers with:
- *     - Console layer (colorized bot logs)
- *     - red.log file layer (bot logs only)
- *     - serenity.log file layer (serenity logs only)
- *  3. Sets up log rotation
- *
- * Returns a `WorkerGuard` that must be kept alive to ensure logs are flushed.
+/**
+ * Initializes the logger based on the provided configuration.
+ * This function sets up logging to both a file and stdout,
+ * and also spawns an asynchronous task to handle log rotation.
  */
-pub async fn init_logger_with_config(config: &Config) -> io::Result<Vec<WorkerGuard>> {
-    /* Create daily log directory */
-    let log_folder = &config.logging.directory;
-    let today_dir = create_daily_log_directory(log_folder).await?;
+pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    /* Parse log level from the configuration. */
+    let log_level = match config.logging.log_level.to_lowercase().as_str() {
+        "error" => LevelFilter::Error,
+        "warn" => LevelFilter::Warn,
+        "info" => LevelFilter::Info,
+        "debug" => LevelFilter::Debug,
+        "trace" => LevelFilter::Trace,
+        _ => LevelFilter::Info,
+    };
 
-    let mut guards = Vec::new();
+    /* Create a log directory based on today's date. */
+    let log_dir = create_log_directory(&config.logging.directory)?;
+    let log_file_path = format!("{}/red.log", log_dir);
 
-    /* Parse log level from config */
-    let level_filter = parse_log_level(&config.logging.log_level);
+    /* Define console formatting with colored log levels. */
+    let console_format =
+        move |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &log::Record| {
+            let level_color = colorize_level(record.level());
+            out.finish(format_args!(
+                "{} [{}] {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                level_color,
+                message
+            ))
+        };
 
-    /* Copy the hide_serenity_logs value to use in the closure */
-    let hide_serenity = config.logging.hide_serenity_logs;
+    /* Define file formatting (without color). */
+    let file_format =
+        move |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &log::Record| {
+            out.finish(format_args!(
+                "{} [{}] {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.level(),
+                message
+            ))
+        };
 
-    /* Set up the console layer with custom colorized formatting */
-    let console_layer = tracing_subscriber::fmt::layer()
-        .with_writer(io::stdout)
-        .event_format(ColorizedFormatter)
-        .with_ansi(true)
-        .with_filter(level_filter)
-        .with_filter(filter_fn(move |metadata| {
-            if hide_serenity {
-                !metadata.target().starts_with("serenity")
+    /* Set up the fern logger. */
+    Dispatch::new()
+        .level(log_level)
+        /* Optionally hide logs from Serenity if configured. */
+        .level_for(
+            "serenity",
+            if config.logging.hide_serenity_logs {
+                LevelFilter::Off
             } else {
-                true
-            }
-        }));
+                log_level
+            },
+        )
+        .chain(
+            Dispatch::new()
+                .format(file_format)
+                .chain(fern::log_file(&log_file_path)?)
+                .level(log_level),
+        )
+        .chain(
+            Dispatch::new()
+                .format(console_format)
+                .chain(std::io::stdout())
+                .level(log_level),
+        )
+        .apply()?;
 
-    /* Set up the red.log file layer */
-    let bot_log_path = format!("{}/red.log", today_dir);
-    let bot_file_appender = tracing_appender::rolling::never(&today_dir, "red.log");
-    let (bot_writer, bot_guard) = tracing_appender::non_blocking(bot_file_appender);
-    guards.push(bot_guard);
+    info!("Logger initialized with level {:?}", log_level);
+    info!("Logging to file: {}", log_file_path);
 
-    let bot_file_layer = tracing_subscriber::fmt::layer()
-        .with_writer(bot_writer)
-        .event_format(NonColorizedFormatter) // Use our custom non-colored formatter
-        .with_ansi(false)
-        .with_filter(level_filter)
-        .with_filter(filter_fn(|metadata| {
-            !metadata.target().starts_with("serenity")
-        }));
-
-    /* Set up the serenity.log file layer */
-    let serenity_file_appender = tracing_appender::rolling::never(&today_dir, "serenity.log");
-    let (serenity_writer, serenity_guard) = tracing_appender::non_blocking(serenity_file_appender);
-    guards.push(serenity_guard);
-
-    let serenity_file_layer = tracing_subscriber::fmt::layer()
-        .with_writer(serenity_writer)
-        .event_format(NonColorizedFormatter) // Use our custom non-colored formatter
-        .with_ansi(false)
-        .with_filter(LevelFilter::TRACE)
-        .with_filter(filter_fn(|metadata| {
-            metadata.target().starts_with("serenity")
-        }));
-
-    /* Register all layers with the global subscriber */
-    tracing_subscriber::registry()
-        .with(console_layer)
-        .with(bot_file_layer)
-        .with(serenity_file_layer)
-        .init();
-
-    info!("Logger initialized with daily log directories");
-    info!("Bot logs: {}", bot_log_path);
-
-    /* Set up log rotation using configuration values */
-    let base_dir = log_folder.to_string();
-    let rotation_frequency_days = config.logrotate.parse_frequency();
+    /* Spawn the asynchronous log rotation task. */
+    let base_dir = config.logging.directory.clone();
+    let rotation_frequency = config.logrotate.parse_frequency();
     let rotation_time = config.logrotate.rotation_time.clone();
-
-    info!(
-        "Setting up log rotation: every {} days at {}",
-        rotation_frequency_days, rotation_time
-    );
-
-    /* Spawn a task to handle log rotation in the background */
-    task::spawn(async move {
-        logrotate::schedule_log_rotation(&base_dir, rotation_frequency_days, &rotation_time).await;
+    tokio::spawn(async move {
+        logrotate::schedule_log_rotation(&base_dir, rotation_frequency, &rotation_time).await;
     });
 
-    Ok(guards)
+    Ok(())
 }
 
-/* Creates a daily timestamped log directory.
- *  Format: {base_dir}/{YYYY-MM-DD}/
+/**
+ * Creates a log directory based on the current date within the specified base directory.
  */
-async fn create_daily_log_directory(base_dir: &str) -> io::Result<String> {
+fn create_log_directory(base_dir: &str) -> io::Result<String> {
     let today = Local::now().format("%Y-%m-%d").to_string();
     let log_dir = format!("{}/{}", base_dir, today);
-
     if !Path::new(&log_dir).exists() {
-        fs::create_dir_all(&log_dir).await?;
+        fs::create_dir_all(&log_dir)?;
     }
-
     Ok(log_dir)
 }
 
-/* Convert the user config's log_level string into a `tracing_subscriber::filter::LevelFilter`. */
-fn parse_log_level(level_str: &str) -> LevelFilter {
-    match level_str.to_lowercase().as_str() {
-        "error" => LevelFilter::ERROR,
-        "warn" => LevelFilter::WARN,
-        "info" => LevelFilter::INFO,
-        "debug" => LevelFilter::DEBUG,
-        "trace" => LevelFilter::TRACE,
-        _ => LevelFilter::TRACE, /* fallback */
-    }
-}
-
-/* Formats the log level with appropriate color */
-pub fn colorize_level(level: &str) -> colored::ColoredString {
-    match level.to_lowercase().as_str() {
-        "error" => "[ERROR]".red().bold(),
-        "warn" => "[WARN]".yellow().bold(),
-        "info" => "[INFO]".green().bold(),
-        "debug" => "[DEBUG]".blue().bold(),
-        "trace" => "[TRACE]".cyan().bold(),
-        _ => format!("[{}]", level).normal(),
+/**
+ * Returns a colored string for the log level using the colored crate.
+ */
+fn colorize_level(level: Level) -> colored::ColoredString {
+    match level {
+        Level::Error => "ERROR".red().bold(),
+        Level::Warn => "WARN".yellow().bold(),
+        Level::Info => "INFO".green().bold(),
+        Level::Debug => "DEBUG".blue().bold(),
+        Level::Trace => "TRACE".cyan().bold(),
     }
 }
