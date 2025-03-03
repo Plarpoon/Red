@@ -27,7 +27,8 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
 
     /* Create a log directory based on today's date. */
     let log_dir = create_log_directory(&config.logging.directory)?;
-    let log_file_path = format!("{}/red.log", log_dir);
+    let red_log_path = format!("{}/red.log", log_dir);
+    let serenity_log_path = format!("{}/serenity.log", log_dir);
 
     /* Define console formatting with colored log levels. */
     let console_format =
@@ -52,34 +53,38 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
             ))
         };
 
-    /* Set up the fern logger. */
+    /* Set up the fern logger with separate chains for non-serenity and serenity logs. */
     Dispatch::new()
         .level(log_level)
-        /* Optionally hide logs from Serenity if configured. */
-        .level_for(
-            "serenity",
-            if config.logging.hide_serenity_logs {
-                LevelFilter::Off
-            } else {
-                log_level
-            },
-        )
+        /* Log non-serenity logs to red.log */
         .chain(
             Dispatch::new()
+                .filter(|record| !record.target().starts_with("serenity"))
                 .format(file_format)
-                .chain(fern::log_file(&log_file_path)?)
+                .chain(fern::log_file(&red_log_path)?)
                 .level(log_level),
         )
+        /* Log non-serenity logs to console */
         .chain(
             Dispatch::new()
+                .filter(|record| !record.target().starts_with("serenity"))
                 .format(console_format)
                 .chain(std::io::stdout())
+                .level(log_level),
+        )
+        /* Log serenity logs exclusively to serenity.log */
+        .chain(
+            Dispatch::new()
+                .filter(|record| record.target().starts_with("serenity"))
+                .format(file_format)
+                .chain(fern::log_file(&serenity_log_path)?)
                 .level(log_level),
         )
         .apply()?;
 
     info!("Logger initialized with level {:?}", log_level);
-    info!("Logging to file: {}", log_file_path);
+    info!("Logging to file: {}", red_log_path);
+    info!("Serenity logs to file: {}", serenity_log_path);
 
     /* Spawn the asynchronous log rotation task. */
     let base_dir = config.logging.directory.clone();
