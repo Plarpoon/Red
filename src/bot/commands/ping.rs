@@ -1,6 +1,5 @@
 use log::{error, info};
-use serenity::model::channel::Message;
-use serenity::prelude::*;
+use serenity::{model::channel::Message, prelude::*};
 
 /* Handles the `!ping` command. */
 pub async fn handle_ping(ctx: &Context, msg: &Message) {
@@ -8,8 +7,9 @@ pub async fn handle_ping(ctx: &Context, msg: &Message) {
         return;
     }
 
-    match msg.channel_id.say(&ctx.http, "Pong!").await {
-        Ok(_) => info!("Successfully sent 'Pong!' in response to '!ping' command."),
-        Err(why) => error!("Error sending message: {:?}", why),
+    if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
+        error!("Error sending message: {:?}", why);
+    } else {
+        info!("Successfully sent 'Pong!' in response to '!ping' command.");
     }
 }

@@ -20,7 +20,7 @@ serde = "1.0.218"
 toml = "0.8.20"
 
 # Database
-surrealdb = "2.2.1"
+#surrealdb = "2.2.1"
 
 # Date and time
 chrono = "0.4.40"
@@ -28,9 +28,6 @@ chrono = "0.4.40"
 # Logging and tracing
 fern = "0.7.1"
 log = "0.4.26"
-tracing = "0.1.41"
-tracing-appender = "0.2.3"
-tracing-subscriber = { version = "0.3.19", features = ["json"] }
 
 # Utilities
 colored = "3.0.0"

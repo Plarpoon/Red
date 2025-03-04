@@ -1,8 +1,8 @@
 use chrono::{Duration as ChronoDuration, Local, NaiveTime};
 use log;
-use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
+use tokio::fs;
 use tokio::time;
 
 /* Calculates the next rotation time based on the current time and a configured rotation time. */
@@ -40,9 +40,10 @@ pub async fn schedule_log_rotation(
             sleep_duration
         );
         time::sleep(sleep_duration).await;
-        match rotate_logs(base_dir, rotation_frequency_days) {
-            Ok(_) => log::info!("Log rotation completed successfully."),
-            Err(e) => log::error!("Log rotation failed: {}", e),
+        if let Err(e) = rotate_logs_async(base_dir, rotation_frequency_days).await {
+            log::error!("Log rotation failed: {}", e);
+        } else {
+            log::info!("Log rotation completed successfully.");
         }
     }
 }
@@ -58,10 +59,10 @@ fn parse_rotation_time(rotation_time: &str) -> Option<NaiveTime> {
     None
 }
 
-/* Rotates logs by deleting directories older than the specified number of days.
+/* Asynchronously rotates logs by deleting directories older than the specified number of days.
    Iterates over each subdirectory in the base directory.
 */
-pub fn rotate_logs(base_dir: &str, rotation_frequency_days: u64) -> std::io::Result<()> {
+async fn rotate_logs_async(base_dir: &str, rotation_frequency_days: u64) -> std::io::Result<()> {
     log::info!("Log rotation has started.");
     let base_path = Path::new(base_dir);
     let allowed_duration = Duration::from_secs(rotation_frequency_days * 24 * 60 * 60);
@@ -70,27 +71,29 @@ pub fn rotate_logs(base_dir: &str, rotation_frequency_days: u64) -> std::io::Res
         rotation_frequency_days
     );
 
-    if !base_path.exists() {
+    if fs::metadata(base_path).await.is_err() {
         log::info!("Base directory does not exist. Exiting log rotation.");
         return Ok(());
     }
 
-    for entry in fs::read_dir(base_path)? {
-        let entry = entry?;
-        if let Err(e) = process_entry(&entry, allowed_duration) {
+    let mut read_dir = fs::read_dir(base_path).await?;
+    while let Some(entry) = read_dir.next_entry().await? {
+        if let Err(e) = process_entry_async(&entry, allowed_duration).await {
             log::warn!("Failed to process {:?}: {}", entry.path(), e);
         }
     }
     Ok(())
 }
 
-/* Processes a single directory entry:
+/* Asynchronously processes a single directory entry:
    - If the entry is not a directory, it is skipped.
-   - If the directory's last modified time is older than the allowed duration,
-     it is deleted.
+   - If the directory's last modified time is older than the allowed duration, it is deleted.
 */
-fn process_entry(entry: &fs::DirEntry, allowed_duration: Duration) -> std::io::Result<()> {
-    let metadata = entry.metadata()?;
+async fn process_entry_async(
+    entry: &fs::DirEntry,
+    allowed_duration: Duration,
+) -> std::io::Result<()> {
+    let metadata = entry.metadata().await?;
     if !metadata.is_dir() {
         return Ok(());
     }
@@ -104,10 +107,9 @@ fn process_entry(entry: &fs::DirEntry, allowed_duration: Duration) -> std::io::R
     let elapsed = SystemTime::now()
         .duration_since(modified)
         .unwrap_or(Duration::ZERO);
-
     if elapsed > allowed_duration {
         log::warn!("Deleting log directory: {}", directory_name);
-        fs::remove_dir_all(entry.path())?;
+        fs::remove_dir_all(entry.path()).await?;
     } else {
         log::info!("Keeping log directory: {}", directory_name);
     }

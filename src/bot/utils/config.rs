@@ -4,7 +4,7 @@ use std::path::Path;
 use tokio::fs;
 use toml;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct Config {
     pub red: RedConfig,
@@ -12,80 +12,77 @@ pub struct Config {
     pub logrotate: LogRotateConfig,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            red: RedConfig::default(),
-            logging: LoggingConfig::default(),
-            logrotate: LogRotateConfig::default(),
-        }
-    }
-}
-
-/* Sub-configuration for the bot's token and shard count */
-#[derive(Debug, Serialize, Deserialize, Clone)]
+/* Bot token and shard configuration */
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct RedConfig {
+    #[serde(default = "default_token")]
     pub token: String,
+    #[serde(default = "default_shards")]
     pub shards: u64,
 }
 
-impl Default for RedConfig {
-    fn default() -> Self {
-        Self {
-            token: "placeholder_token".to_string(),
-            shards: 1,
-        }
-    }
+fn default_token() -> String {
+    "placeholder_token".to_string()
 }
 
-/* Sub-configuration for logging */
-#[derive(Debug, Serialize, Deserialize, Clone)]
+fn default_shards() -> u64 {
+    1
+}
+
+/* Logging configuration */
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct LoggingConfig {
     #[serde(rename = "log-level")]
+    #[serde(default = "default_log_level")]
     pub log_level: String,
+    #[serde(default = "default_directory")]
     pub directory: String,
     #[serde(rename = "hide serenity logs")]
+    #[serde(default = "default_hide_serenity_logs")]
     pub hide_serenity_logs: bool,
 }
 
-impl Default for LoggingConfig {
-    fn default() -> Self {
-        Self {
-            log_level: "info".to_string(),
-            directory: "logs".to_string(),
-            hide_serenity_logs: true,
-        }
-    }
+fn default_log_level() -> String {
+    "info".to_string()
 }
 
-/* Sub-configuration for log rotation */
-#[derive(Debug, Serialize, Deserialize, Clone)]
+fn default_directory() -> String {
+    "logs".to_string()
+}
+
+fn default_hide_serenity_logs() -> bool {
+    true
+}
+
+/* Log rotation configuration */
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct LogRotateConfig {
+    #[serde(default = "default_frequency")]
     pub frequency: String,
+    #[serde(default = "default_rotation_time")]
     pub rotation_time: String,
 }
 
-impl Default for LogRotateConfig {
-    fn default() -> Self {
-        Self {
-            frequency: "7d".to_string(),
-            rotation_time: "00:00".to_string(),
-        }
-    }
+fn default_frequency() -> String {
+    "7d".to_string()
+}
+
+fn default_rotation_time() -> String {
+    "00:00".to_string()
 }
 
 impl LogRotateConfig {
+    /* Parses the frequency string (e.g., "7d") into a u64 */
     pub fn parse_frequency(&self) -> u64 {
-        let freq = self.frequency.trim();
-        if let Some(days) = freq.strip_suffix('d') {
-            days.parse::<u64>().unwrap_or(7)
-        } else {
-            /* Try to parse as just days */
-            freq.parse::<u64>().unwrap_or(7)
-        }
+        self.frequency
+            .trim()
+            .strip_suffix('d')
+            .and_then(|s| s.parse().ok())
+            .or_else(|| self.frequency.trim().parse().ok())
+            .unwrap_or(7)
     }
 }
 
@@ -93,13 +90,12 @@ impl Config {
     /*
        Asynchronously loads the configuration from "config.toml".
        If the file is missing, it is created with default values.
-       Then, extra keys are removed by reserializing the config,
-       and the configuration is validated.
+       Extra keys are removed by reserializing the config, then the configuration is validated.
     */
     pub async fn load_or_create_and_validate_async() -> Result<Self, Box<dyn std::error::Error>> {
         let config_path = Path::new("config.toml");
 
-        if !config_path.exists() {
+        if fs::metadata(config_path).await.is_err() {
             Self::create_default_config_async(config_path).await?;
         }
 
@@ -125,14 +121,14 @@ impl Config {
         config_path: &Path,
     ) -> Result<(), Box<dyn std::error::Error>> {
         warn!(
-            "Configuration file '{}' not found. Creating a new one with default values.",
+            "Configuration file '{}' not found. Creating default config.",
             config_path.display()
         );
         let default_config = Self::default();
         let toml_str = toml::to_string_pretty(&default_config)?;
         fs::write(config_path, toml_str).await?;
         error!(
-            "A new '{}' has been created. Please update the 'token' field with your actual Discord bot token.",
+            "Created '{}'. Please update the 'token' field with your actual Discord bot token.",
             config_path.display()
         );
         std::process::exit(1);
@@ -141,15 +137,18 @@ impl Config {
     /* Validates the configuration by checking critical fields */
     fn validate(&self) {
         if self.red.token == "placeholder_token" {
-            error!("The 'token' field in 'config.toml' is still set to 'placeholder_token'. Please update it.");
+            error!(
+                "The 'token' field in 'config.toml' is set to 'placeholder_token'. Please update it."
+            );
             std::process::exit(1);
         }
-        match self.logging.log_level.to_lowercase().as_str() {
-            "info" | "debug" | "trace" | "warn" | "error" => {}
-            _ => {
-                error!("Invalid 'log-level' in 'config.toml'. Use one of: 'info', 'debug', 'trace', 'warn', 'error'.");
-                std::process::exit(1);
-            }
+        let valid_levels = ["info", "debug", "trace", "warn", "error"];
+        if !valid_levels.contains(&self.logging.log_level.to_lowercase().as_str()) {
+            error!(
+                "Invalid 'log-level' in 'config.toml'. Use one of: {}.",
+                valid_levels.join(", ")
+            );
+            std::process::exit(1);
         }
     }
 }

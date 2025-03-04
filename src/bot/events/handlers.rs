@@ -1,10 +1,10 @@
 use crate::bot::commands::ping;
-
 use log::info;
-use serenity::async_trait;
-use serenity::model::channel::Message;
-use serenity::model::gateway::Ready;
-use serenity::prelude::*;
+use serenity::{
+    async_trait,
+    model::{channel::Message, gateway::Ready},
+    prelude::*,
+};
 
 pub struct Handler;
 
