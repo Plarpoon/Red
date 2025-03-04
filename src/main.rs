@@ -1,4 +1,5 @@
 mod bot;
+
 use bot::events::handlers::Handler;
 use bot::utils::config::Config;
 use bot::utils::log::logger;
@@ -7,7 +8,6 @@ use log::{error, info};
 use serenity::{Client, prelude::GatewayIntents};
 use std::process;
 
-/* The main asynchronous entry point of the application */
 #[tokio::main]
 async fn main() {
     /* Run the application and exit on error */

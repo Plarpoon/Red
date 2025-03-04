@@ -4,7 +4,7 @@ use crate::bot::utils::log::logrotate;
 use chrono::Local;
 use colored::Colorize;
 use fern::Dispatch;
-use log::{Level, LevelFilter, info};
+use log::{Level, LevelFilter, Metadata, info};
 use std::io;
 use tokio::fs;
 
@@ -50,24 +50,31 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
             ))
         };
 
+    /* Define filters using Metadata (not Record) as required by fern */
+    let non_serenity_filter = |metadata: &Metadata| !metadata.target().starts_with("serenity");
+
+    let serenity_filter = |metadata: &Metadata| {
+        metadata.target().starts_with("serenity") && metadata.level() >= Level::Warn
+    };
+
     /* Set up the fern logger with separate chains for non-serenity and serenity logs */
     Dispatch::new()
         .level(log_level)
         .chain(
             Dispatch::new()
-                .filter(|record| !record.target().starts_with("serenity"))
+                .filter(non_serenity_filter)
                 .format(file_format)
                 .chain(fern::log_file(&red_log_path)?),
         )
         .chain(
             Dispatch::new()
-                .filter(|record| !record.target().starts_with("serenity"))
+                .filter(non_serenity_filter)
                 .format(console_format)
                 .chain(std::io::stdout()),
         )
         .chain(
             Dispatch::new()
-                .filter(|record| record.target().starts_with("serenity"))
+                .filter(serenity_filter)
                 .format(file_format)
                 .chain(fern::log_file(&serenity_log_path)?),
         )
