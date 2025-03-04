@@ -58,8 +58,18 @@ impl<W: Write> Write for NoEmptyLineWriter<W> {
     }
 }
 
-/* Returns true if the log record’s message exactly matches one of the spam words. */
-fn is_spam(record: &Record) -> bool {
+/* Returns the current timestamp formatted as "YYYY-MM-DD HH:MM:SS". */
+fn current_timestamp() -> String {
+    Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+/* Helper function to create a boxed NoEmptyLineWriter from a given writer. */
+fn create_boxed_writer<W: Write + Send + 'static>(writer: W) -> Box<dyn Write + Send> {
+    Box::new(NoEmptyLineWriter::new(writer))
+}
+
+/* Returns true if the log record’s message exactly matches one of the heartbeat words. */
+fn is_heartbeat(record: &Record) -> bool {
     let msg = format!("{}", record.args());
     matches!(
         msg.as_str(),
@@ -79,7 +89,8 @@ fn is_spam(record: &Record) -> bool {
 }
 
 /* Initializes the logger based on the provided configuration.
-   Sets up logging to both a file and stdout, and spawns an asynchronous task for log rotation.
+   Sets up logging to console and red.log, and conditionally to serenity.log and heartbeat.log
+   if the extra_logs setting is true. Also spawns an asynchronous task for log rotation.
 */
 pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
     /* Determine log level from configuration */
@@ -96,19 +107,20 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
     let log_dir = create_log_directory(&config.logging.directory).await?;
     let red_log_path = format!("{}/red.log", log_dir);
     let serenity_log_path = format!("{}/serenity.log", log_dir);
+    let heartbeat_log_path = format!("{}/heartbeat.log", log_dir);
 
     /* Define non-serenity console formatting with colored log levels.
-       If the record is spam, output an empty string.
+       If the record is a heartbeat log, output an empty string.
     */
     let non_serenity_console_format =
         move |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &Record| {
-            if is_spam(record) {
+            if is_heartbeat(record) {
                 out.finish(format_args!(""))
             } else {
                 let level_color = colorize_level(record.level());
                 out.finish(format_args!(
                     "{} [{}] {}",
-                    Local::now().format("%Y-%m-%d %H:%M:%S"),
+                    current_timestamp(),
                     level_color,
                     message
                 ))
@@ -116,31 +128,48 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
         };
 
     /* Define non-serenity file formatting (without colors).
-       If the record is spam, output an empty string.
+       If the record is a heartbeat log, output an empty string.
     */
     let non_serenity_file_format =
         move |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &Record| {
-            if is_spam(record) {
+            if is_heartbeat(record) {
                 out.finish(format_args!(""))
             } else {
                 out.finish(format_args!(
                     "{} [{}] {}",
-                    Local::now().format("%Y-%m-%d %H:%M:%S"),
+                    current_timestamp(),
                     record.level(),
                     message
                 ))
             }
         };
 
-    /* Define file formatting for other chains (no spam filtering here) */
+    /* Define file formatting for general logs (no heartbeat filtering here) */
     let file_format =
         move |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &Record| {
             out.finish(format_args!(
                 "{} [{}] {}",
-                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                current_timestamp(),
                 record.level(),
                 message
             ))
+        };
+
+    /* Define heartbeat file formatting.
+       If the record is a heartbeat log, output normally; otherwise, output an empty string.
+    */
+    let heartbeat_file_format =
+        move |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &Record| {
+            if is_heartbeat(record) {
+                out.finish(format_args!(
+                    "{} [{}] {}",
+                    current_timestamp(),
+                    record.level(),
+                    message
+                ))
+            } else {
+                out.finish(format_args!(""))
+            }
         };
 
     /* Define filters using Metadata.
@@ -155,15 +184,34 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
     /* Wrap the writers so that empty lines are not written.
        We wrap the underlying writer in a Box<dyn Write + Send> to satisfy fern's requirements.
     */
-    let stdout_writer =
-        Box::new(NoEmptyLineWriter::new(std::io::stdout())) as Box<dyn Write + Send>;
-    let red_file_writer =
-        Box::new(NoEmptyLineWriter::new(fern::log_file(&red_log_path)?)) as Box<dyn Write + Send>;
-    let serenity_file_writer = Box::new(NoEmptyLineWriter::new(fern::log_file(&serenity_log_path)?))
-        as Box<dyn Write + Send>;
+    let stdout_writer = create_boxed_writer(std::io::stdout());
+    let red_file_writer = create_boxed_writer(fern::log_file(&red_log_path)?);
 
-    /* Set up the fern logger with separate chains for non-serenity and serenity logs */
-    Dispatch::new()
+    /* Conditionally set up extra log file writers if extra_logs is true */
+    let extra_logs = config.logging.extra_logs;
+    let serenity_chain = if extra_logs {
+        Some(
+            Dispatch::new()
+                .filter(serenity_filter)
+                .format(file_format)
+                .chain(create_boxed_writer(fern::log_file(&serenity_log_path)?)),
+        )
+    } else {
+        None
+    };
+
+    let heartbeat_chain = if extra_logs {
+        Some(
+            Dispatch::new()
+                .format(heartbeat_file_format)
+                .chain(create_boxed_writer(fern::log_file(&heartbeat_log_path)?)),
+        )
+    } else {
+        None
+    };
+
+    /* Build the overall dispatcher */
+    let mut dispatch = Dispatch::new()
         .level(log_level)
         .chain(
             Dispatch::new()
@@ -176,18 +224,26 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
                 .filter(non_serenity_filter)
                 .format(non_serenity_console_format)
                 .chain(stdout_writer),
-        )
-        .chain(
-            Dispatch::new()
-                .filter(serenity_filter)
-                .format(file_format)
-                .chain(serenity_file_writer),
-        )
-        .apply()?;
+        );
+
+    if let Some(serenity_disp) = serenity_chain {
+        dispatch = dispatch.chain(serenity_disp);
+    }
+
+    if let Some(heartbeat_disp) = heartbeat_chain {
+        dispatch = dispatch.chain(heartbeat_disp);
+    }
+
+    dispatch.apply()?;
 
     info!("Logger initialized with level {:?}", log_level);
     info!("Logging to file: {}", red_log_path);
-    info!("Serenity logs to file: {}", serenity_log_path);
+    if extra_logs {
+        info!("Serenity logs to file: {}", serenity_log_path);
+        info!("Heartbeat logs to file: {}", heartbeat_log_path);
+    } else {
+        info!("Extra logs disabled; serenity.log and heartbeat.log will not be written.");
+    }
 
     /* Spawn asynchronous log rotation task */
     let base_dir = config.logging.directory.clone();

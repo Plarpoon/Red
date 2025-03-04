@@ -34,14 +34,12 @@ fn default_shards() -> u64 {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct LoggingConfig {
-    #[serde(rename = "log-level")]
     #[serde(default = "default_log_level")]
     pub log_level: String,
     #[serde(default = "default_directory")]
     pub directory: String,
-    #[serde(rename = "hide serenity logs")]
-    #[serde(default = "default_hide_serenity_logs")]
-    pub hide_serenity_logs: bool,
+    #[serde(default = "default_extra_logs")]
+    pub extra_logs: bool,
 }
 
 fn default_log_level() -> String {
@@ -52,7 +50,7 @@ fn default_directory() -> String {
     "logs".to_string()
 }
 
-fn default_hide_serenity_logs() -> bool {
+fn default_extra_logs() -> bool {
     true
 }
 
