@@ -1,5 +1,5 @@
 use crate::bot::utils::config::Config;
-use crate::bot::utils::logrotate;
+use crate::bot::utils::log::logrotate;
 
 use chrono::Local;
 use colored::Colorize;

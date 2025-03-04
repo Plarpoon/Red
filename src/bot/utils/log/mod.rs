@@ -1,2 +1,2 @@
 pub mod logger;
-pub mod loigrate;
+pub mod logrotate;
