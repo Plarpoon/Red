@@ -86,6 +86,7 @@ fn is_heartbeat(record: &Record) -> bool {
             | "update_manager;"
             | "action;"
             | "identify;"
+            | "heartbeat;"
     )
 }
 
