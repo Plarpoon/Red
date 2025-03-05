@@ -4,7 +4,7 @@ use crate::bot::utils::log::logrotate;
 use chrono::Local;
 use colored::Colorize;
 use fern::Dispatch;
-use log::{Level, LevelFilter, Metadata, Record, info};
+use log::{Level, LevelFilter, Metadata, Record, info, warn};
 use std::io::{self, Write};
 use tokio::fs;
 
@@ -90,10 +90,7 @@ fn is_heartbeat(record: &Record) -> bool {
     )
 }
 
-/* Initializes the logger based on the provided configuration.
-   Sets up logging to console and red.log, and conditionally to serenity.log and heartbeat.log
-   if the extra_logs setting is true. Also spawns an asynchronous task for log rotation.
-*/
+/* Initializes the logger based on the provided configuration. */
 pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
     /* Determine log level from configuration */
     let log_level = match config.logging.log_level.to_lowercase().as_str() {
@@ -158,11 +155,11 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
         };
 
     /* Define heartbeat file formatting.
-       If the record is a heartbeat log, output normally; otherwise, output an empty string.
+       If the record is a heartbeat log or has target "heartbeat", output normally; otherwise, output an empty string.
     */
     let heartbeat_file_format =
         move |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &Record| {
-            if is_heartbeat(record) {
+            if record.target() == "heartbeat" || is_heartbeat(record) {
                 out.finish(format_args!(
                     "{} [{}] {}",
                     current_timestamp(),
@@ -212,7 +209,7 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
         None
     };
 
-    /* Build the overall dispatcher */
+    /* Build the dispatcher */
     let mut dispatch = Dispatch::new()
         .level(log_level)
         .chain(
@@ -237,6 +234,15 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
     }
 
     dispatch.apply()?;
+
+    /* Write an initialization message exclusively to serenity.log and heartbeat.log.
+       The message is logged at WARN level with targets "serenity" and "heartbeat" respectively.
+       These messages will be filtered out by non-extra log chains.
+    */
+    if extra_logs {
+        warn!(target: "serenity", "Logging initialized.");
+        warn!(target: "heartbeat", "Logging initialized.");
+    }
 
     info!("Logger initialized with level {:?}", log_level);
     info!("Logging to file: {}", red_log_path);
