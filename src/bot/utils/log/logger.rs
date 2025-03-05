@@ -70,24 +70,24 @@ fn create_boxed_writer<W: Write + Send + 'static>(writer: W) -> Box<dyn Write + 
 
 /* Returns true if the log record’s message exactly matches one of the heartbeat words. */
 fn is_heartbeat(record: &Record) -> bool {
+    const HEARTBEAT_WORDS: &[&str] = &[
+        "into_future;",
+        "start;",
+        "shutdown_all;",
+        "initialize;",
+        "run;",
+        "latency;",
+        "check_last_start;",
+        "recv;",
+        "do_heartbeat;",
+        "recv_event;",
+        "update_manager;",
+        "action;",
+        "identify;",
+        "heartbeat;",
+    ];
     let msg = format!("{}", record.args());
-    matches!(
-        msg.as_str(),
-        "into_future;"
-            | "start;"
-            | "shutdown_all;"
-            | "initialize;"
-            | "run;"
-            | "latency;"
-            | "check_last_start;"
-            | "recv;"
-            | "do_heartbeat;"
-            | "recv_event;"
-            | "update_manager;"
-            | "action;"
-            | "identify;"
-            | "heartbeat;"
-    )
+    HEARTBEAT_WORDS.contains(&msg.as_str())
 }
 
 /* Initializes the logger based on the provided configuration. */
