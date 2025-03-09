@@ -1,8 +1,8 @@
 [package]
 name = "red"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 edition = "2024"
-description = "A robust and versatile Discord bot developed using the Serenity library."
+description = "A robust and versatile Discord bot developed using the poise/serenity library."
 license = "GPL-3.0-only WITH Commons-Clause-1.0"
 readme = "README.md"
 repository = "https://github.com/Plarpoon/Red"
@@ -10,10 +10,10 @@ publish = false
 
 [dependencies]
 # Discord API
-serenity = { version = "0.12.4", features = ["full"] }
+poise = "0.6.1"
 
 # Async runtime
-tokio = { version = "1.43.0", features = ["full"] }
+tokio = { version = "1.44.0", features = ["full"] }
 
 # Data handling and serialization
 serde = "1.0.218"

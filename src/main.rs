@@ -1,28 +1,28 @@
 mod bot;
 
-use bot::events::handlers::Handler;
+use bot::commands::ping;
 use bot::utils::config::Config;
 use bot::utils::log::logger;
-
 use log::{error, info};
-use serenity::{Client, prelude::GatewayIntents};
+use poise::Framework;
+use poise::serenity_prelude as serenity;
 use std::process;
 
 #[tokio::main]
 async fn main() {
-    /* Run the application and exit on error */
-    if let Err(err) = run().await {
+    /* Run the bot and handle errors by logging and exiting */
+    run().await.unwrap_or_else(|err| {
         error!("Application error: {:?}", err);
-        process::exit(1);
-    }
+        process::exit(1)
+    })
 }
 
-/* Runs the bot and propagates errors using Result */
+/* Asynchronously runs the bot and propagates any errors */
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    /* Load and validate the configuration */
+    /* Load and validate the configuration asynchronously */
     let config = Config::load_or_create_and_validate_async().await?;
 
-    /* Initialize the logger using the configuration */
+    /* Initialize the logger using the loaded configuration */
     logger::init_logger_with_config(&config).await?;
     info!("Starting bot.");
 
@@ -30,26 +30,29 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let token = &config.red.token;
     info!("Discord bot token retrieved.");
 
-    /* Configure gateway intents */
-    let intents = GatewayIntents::GUILD_MESSAGES
-        | GatewayIntents::DIRECT_MESSAGES
-        | GatewayIntents::MESSAGE_CONTENT;
+    /* Configure the gateway intents required by the bot */
+    let intents = serenity::GatewayIntents::GUILD_MESSAGES
+        | serenity::GatewayIntents::DIRECT_MESSAGES
+        | serenity::GatewayIntents::MESSAGE_CONTENT;
     info!("Gateway intents configured.");
 
-    /* Build the Discord client with the event handler */
-    let mut client = Client::builder(token, intents)
-        .event_handler(Handler)
+    /* Build the Poise framework with registered commands */
+    let framework = Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: vec![ping::ping()],
+            ..Default::default()
+        })
+        .setup(|_ctx, _ready, _framework| Box::pin(async { Ok(()) }))
+        .build();
+
+    /* Create the Serenity client with the attached Poise framework */
+    let mut client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
         .await?;
 
-    /* Start the client and handle connection-related errors */
+    /* Start the client and map any startup errors */
     client.start().await.map_err(|e| {
         let err_msg = format!("{:?}", e);
-        if err_msg.contains("connection refused")
-            || err_msg.contains("network unreachable")
-            || err_msg.contains("timed out")
-        {
-            error!("Discord servers appear to be offline or unreachable! Critical error.");
-        }
         error!("Client error: {}", err_msg);
         e.into()
     })

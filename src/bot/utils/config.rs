@@ -112,9 +112,7 @@ impl Config {
         Ok(config)
     }
 
-    /*
-       Asynchronously creates a default configuration file and exits the process.
-    */
+    /* Asynchronously creates a default configuration file. */
     async fn create_default_config_async(
         config_path: &Path,
     ) -> Result<(), Box<dyn std::error::Error>> {
