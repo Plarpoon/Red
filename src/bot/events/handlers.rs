@@ -3,10 +3,8 @@ use poise::serenity_prelude::{
     Context as SerenityContext, EventHandler, Message, Ready, async_trait,
 };
 
-/* Define the event handler struct for Discord events */
 pub struct Handler;
 
-/* Implement the EventHandler trait for Handler using asynchronous methods */
 #[async_trait]
 impl EventHandler for Handler {
     /* Called when the bot connects successfully */
