@@ -1,6 +1,6 @@
 #[poise::command(
     slash_command,
-    description_localized("en", "Ping the bot to calculate latency to Discord's API.")
+    description_localized("en-US", "Ping the bot to calculate latency to Discord's API.")
 )]
 
 pub async fn ping(
