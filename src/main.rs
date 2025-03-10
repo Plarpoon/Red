@@ -4,7 +4,7 @@ use bot::commands::commands_list;
 use bot::utils::config::Config;
 use bot::utils::log::logger;
 
-use log::{error, info};
+use log::{error, info, warn};
 use poise::Framework;
 use poise::serenity_prelude as serenity;
 use std::process;
@@ -64,12 +64,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     /* Recover and set the application ID from Discord */
     let http = client.http.clone();
     let app_info = http.get_current_application_info().await?;
-    info!("Recovered application ID: {}", app_info.id);
+    info!("Application ID: {}", app_info.id);
     http.set_application_id(app_info.id);
 
     /* If in debug mode, manually register guild commands for faster updates */
     if let Some(guild_id) = guild_id {
-        info!(
+        warn!(
             "Manually registering guild commands for guild: {}",
             guild_id
         );
