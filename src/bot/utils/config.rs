@@ -10,6 +10,7 @@ pub struct Config {
     pub red: RedConfig,
     pub logging: LoggingConfig,
     pub logrotate: LogRotateConfig,
+    pub debug: DebugConfig,
 }
 
 /* Bot token and shard configuration */
@@ -82,6 +83,24 @@ impl LogRotateConfig {
             .or_else(|| self.frequency.trim().parse().ok())
             .unwrap_or(7)
     }
+}
+
+/* Debug configuration */
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
+pub struct DebugConfig {
+    #[serde(default = "default_enable_debug")]
+    pub enable_debug: bool,
+    #[serde(default = "default_debug_server_id")]
+    pub debug_server_id: String,
+}
+
+fn default_enable_debug() -> bool {
+    false
+}
+
+fn default_debug_server_id() -> String {
+    "placeholder_id".to_string()
 }
 
 impl Config {
