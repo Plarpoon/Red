@@ -1,8 +1,12 @@
-pub type Error = Box<dyn std::error::Error + Send + Sync>;
+#[poise::command(
+    slash_command,
+    description_localized("en", "Ping the bot to calculate latency to Discord's API.")
+)]
 
-#[poise::command(prefix_command, slash_command)]
-pub async fn ping(ctx: poise::Context<'_, (), Error>) -> Result<(), Error> {
-    /* Record the current time before sending the message */
+pub async fn ping(
+    ctx: poise::Context<'_, (), Box<dyn std::error::Error + Send + Sync>>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Record the current time before sending the message
     let start_time = std::time::Instant::now();
 
     /* Send an initial message which will later be edited with the latency embed */

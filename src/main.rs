@@ -1,8 +1,9 @@
 mod bot;
 
-use bot::commands::ping;
+use bot::commands::commands_list;
 use bot::utils::config::Config;
 use bot::utils::log::logger;
+
 use log::{error, info};
 use poise::Framework;
 use poise::serenity_prelude as serenity;
@@ -38,10 +39,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     /* Build the Poise framework with registered commands */
     let framework = Framework::builder()
-        .options(poise::FrameworkOptions {
-            commands: vec![ping::ping()],
-            ..Default::default()
-        })
+        .options(
+            poise::FrameworkOptions::<(), Box<dyn std::error::Error + Send + Sync>> {
+                commands: commands_list::get_commands().await,
+                ..Default::default()
+            },
+        )
         .setup(|_ctx, _ready, _framework| Box::pin(async { Ok(()) }))
         .build();
 
