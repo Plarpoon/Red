@@ -67,13 +67,24 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     info!("Application ID: {}", app_info.id);
     http.set_application_id(app_info.id);
 
+    /* Purge global commands by deleting each one */
+    warn!("Purging all global commands.");
+    let global_commands = http.get_global_commands().await?;
+    for command in global_commands {
+        if let Err(e) = http.delete_global_command(command.id).await {
+            warn!("Failed to delete global command {}: {:?}", command.name, e);
+        } else {
+            info!("Deleted global command: {}", command.name);
+        }
+    }
+
     /* In debug mode, manually purge existing guild commands and re-register updated ones */
     if let Some(guild_id) = guild_id {
         warn!("Purging existing guild commands for guild: {}", guild_id);
         let http = client.http.clone();
         let guild = serenity::GuildId::new(guild_id);
 
-        /* Retrieve and delete each existing command */
+        /* Retrieve and delete each existing guild command */
         let existing_commands = guild.get_commands(&http).await?;
         for command in existing_commands {
             if let Err(e) = guild.delete_command(&http, command.id).await {
@@ -83,7 +94,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        /* Register the current commands */
+        /* Register the current guild commands */
         let commands = commands_list::get_commands().await;
         let command_data = poise::builtins::create_application_commands(&commands);
         guild.set_commands(&http, command_data).await?;
