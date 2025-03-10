@@ -1,23 +1,18 @@
-/* Define a type alias for errors using a boxed error trait object */
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
-/* Create an alias for the Poise command context with unit type as shared data */
-pub type CommandContext<'a> = poise::Context<'a, (), Error>;
-
-/* Define the ping command as both a prefix and a slash command */
 #[poise::command(prefix_command, slash_command)]
-pub async fn ping(ctx: CommandContext<'_>) -> Result<(), Error> {
+pub async fn ping(ctx: poise::Context<'_, (), Error>) -> Result<(), Error> {
     /* Record the current time before sending the message */
     let start_time = std::time::Instant::now();
 
     /* Send an initial message which will later be edited with the latency embed */
-    let sent_message = ctx.say("Calculating latency...").await?;
+    let message = ctx.say("Calculating latency...").await?;
 
     /* Calculate the elapsed time in milliseconds */
     let latency_ms = start_time.elapsed().as_millis();
 
-    /* Edit the message to display an embed containing the latency and its explanation, with the :ping_pong: emoji added to the title */
-    sent_message
+    /* Edit the message to display an embed containing the latency and its explanation */
+    message
         .edit(
             ctx,
             poise::CreateReply::default().embed(
@@ -33,8 +28,37 @@ pub async fn ping(ctx: CommandContext<'_>) -> Result<(), Error> {
         )
         .await?;
 
-    /* Log the successful execution of the ping command with the latency value */
-    log::info!("Ping command responded with {}ms", latency_ms);
+    /* Retrieve the invoking user's tag */
+    let username = ctx.author().tag();
+
+    /* Retrieve guild channel once to reduce repetition */
+    let guild_channel = ctx.guild_channel().await;
+
+    /* Get the channel name or "DM" if not in a guild */
+    let channel_name = guild_channel
+        .as_ref()
+        .map(|gc| gc.name.clone())
+        .unwrap_or_else(|| "DM".to_string());
+
+    /* Get the guild name or "DM" if not in a guild channel */
+    let guild_name = if let Some(gc) = guild_channel {
+        gc.guild_id
+            .to_partial_guild(&ctx.serenity_context().http)
+            .await
+            .map(|g| g.name)
+            .unwrap_or_else(|_| "Unknown".to_string())
+    } else {
+        "DM".to_string()
+    };
+
+    /* Log the execution details including the username, channel, and guild */
+    log::info!(
+        "Ping command by {} in channel '{}' of guild '{}' responded with {}ms",
+        username,
+        channel_name,
+        guild_name,
+        latency_ms
+    );
 
     Ok(())
 }

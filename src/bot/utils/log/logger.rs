@@ -81,6 +81,7 @@ fn is_heartbeat(record: &Record) -> bool {
         "recv;",
         "do_heartbeat;",
         "recv_event;",
+        "resume;",
         "update_manager;",
         "action;",
         "identify;",

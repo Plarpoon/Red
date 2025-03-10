@@ -16,7 +16,7 @@ poise = "0.6.1"
 tokio = { version = "1.44.0", features = ["full"] }
 
 # Data handling and serialization
-serde = "1.0.218"
+serde = "1.0.219"
 toml = "0.8.20"
 
 # Database

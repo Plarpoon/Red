@@ -19,7 +19,7 @@ async fn main() {
 
 /* Asynchronously runs the bot and propagates any errors */
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    /* Load and validate the configuration asynchronously */
+    /* Load and validate the configuration */
     let config = Config::load_or_create_and_validate_async().await?;
 
     /* Initialize the logger using the loaded configuration */
