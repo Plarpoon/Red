@@ -14,7 +14,7 @@ pub struct Config {
 }
 
 /* Bot token and shard configuration */
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct RedConfig {
     #[serde(default = "default_token")]
@@ -31,8 +31,17 @@ fn default_shards() -> u64 {
     1
 }
 
+impl Default for RedConfig {
+    fn default() -> Self {
+        RedConfig {
+            token: default_token(),
+            shards: default_shards(),
+        }
+    }
+}
+
 /* Logging configuration */
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct LoggingConfig {
     #[serde(default = "default_log_level")]
@@ -55,8 +64,18 @@ fn default_extra_logs() -> bool {
     true
 }
 
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        LoggingConfig {
+            log_level: default_log_level(),
+            directory: default_directory(),
+            extra_logs: default_extra_logs(),
+        }
+    }
+}
+
 /* Log rotation configuration */
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct LogRotateConfig {
     #[serde(default = "default_frequency")]
@@ -73,6 +92,15 @@ fn default_rotation_time() -> String {
     "00:00".to_string()
 }
 
+impl Default for LogRotateConfig {
+    fn default() -> Self {
+        LogRotateConfig {
+            frequency: default_frequency(),
+            rotation_time: default_rotation_time(),
+        }
+    }
+}
+
 impl LogRotateConfig {
     /* Parses the frequency string (e.g., "7d") into a u64 */
     pub fn parse_frequency(&self) -> u64 {
@@ -86,7 +114,7 @@ impl LogRotateConfig {
 }
 
 /* Debug configuration */
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct DebugConfig {
     #[serde(default = "default_enable_debug")]
@@ -101,6 +129,15 @@ fn default_enable_debug() -> bool {
 
 fn default_debug_server_id() -> String {
     "placeholder_id".to_string()
+}
+
+impl Default for DebugConfig {
+    fn default() -> Self {
+        DebugConfig {
+            enable_debug: default_enable_debug(),
+            debug_server_id: default_debug_server_id(),
+        }
+    }
 }
 
 impl Config {
