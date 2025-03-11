@@ -35,11 +35,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     /* Determine debug guild ID if debug mode is enabled */
     let guild_id = if config.debug.enable_debug {
-        let id = config
-            .debug
-            .debug_server_id
-            .parse::<u64>()
-            .expect("Invalid debug_server_id");
+        let id = config.debug.debug_server_id;
         info!("Using debug guild ID: {}", id);
         Some(id)
     } else {

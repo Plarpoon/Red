@@ -120,15 +120,15 @@ pub struct DebugConfig {
     #[serde(default = "default_enable_debug")]
     pub enable_debug: bool,
     #[serde(default = "default_debug_server_id")]
-    pub debug_server_id: String,
+    pub debug_server_id: u64,
 }
 
 fn default_enable_debug() -> bool {
     false
 }
 
-fn default_debug_server_id() -> String {
-    "000000000000000000".to_string()
+fn default_debug_server_id() -> u64 {
+    0
 }
 
 impl Default for DebugConfig {
@@ -140,7 +140,7 @@ impl Default for DebugConfig {
     }
 }
 
-/* Helper function to validate frequency format */
+/* Helper function to validate frequency format (must be a number followed by 'd', 'h', or 'm') */
 fn is_valid_frequency(freq: &str) -> bool {
     let freq = freq.trim();
     if freq.len() < 2 {
@@ -153,7 +153,7 @@ fn is_valid_frequency(freq: &str) -> bool {
     num_part.chars().all(|c| c.is_ascii_digit())
 }
 
-/* Helper function to validate rotation_time format */
+/* Helper function to validate rotation_time format (must be HH:MM) */
 fn is_valid_rotation_time(rt: &str) -> bool {
     let parts: Vec<&str> = rt.split(':').collect();
     if parts.len() != 2 || parts[0].len() != 2 || parts[1].len() != 2 {
@@ -166,12 +166,7 @@ fn is_valid_rotation_time(rt: &str) -> bool {
     }
 }
 
-/* Helper function to validate that the variable is numeric */
-fn is_valid_numeric(id: &str) -> bool {
-    !id.is_empty() && id.chars().all(|c| c.is_ascii_digit())
-}
-
-/* Helper function to check and update a field if invalid */
+/* Helper function to check and update a string field if invalid */
 fn check_field<F>(field: &mut String, default_value: &str, field_name: &str, validator: F)
 where
     F: Fn(&str) -> bool,
@@ -189,15 +184,14 @@ impl Config {
     /*
        Asynchronously loads the configuration from "config.toml".
        If the file is missing, it is created with default values.
-       Only invalid fields are reset to defaults. Extra keys are removed by reserializing the config.
+       Only invalid fields are reset to defaults.
+       Extra keys are removed by reserializing the config.
     */
     pub async fn load_or_create_and_validate_async() -> Result<Self, Box<dyn std::error::Error>> {
         let config_path = Path::new("config.toml");
-
         if fs::metadata(config_path).await.is_err() {
             Self::create_default_config_async(config_path).await?;
         }
-
         let contents = fs::read_to_string(config_path).await?;
         let mut config: Self = toml::from_str(&contents).unwrap_or_else(|err| {
             warn!(
@@ -207,9 +201,7 @@ impl Config {
             );
             Self::default()
         });
-
         config.validate_mut();
-
         fs::write(config_path, toml::to_string_pretty(&config)?).await?;
         Ok(config)
     }
@@ -229,7 +221,7 @@ impl Config {
             "Created '{}'. Please update the 'token' field with your actual Discord bot token.",
             config_path.display()
         );
-        std::process::exit(1);
+        Ok(())
     }
 
     /* Validates and fixes the configuration by updating only invalid fields */
@@ -266,13 +258,10 @@ impl Config {
             );
         }
 
-        /* Validate debug_server_id */
-        {
-            check_field(
-                &mut self.debug.debug_server_id,
-                &default_debug_server_id(),
-                "debug_server_id",
-                is_valid_numeric,
+        /* Validate debug_server_id if debug mode is enabled */
+        if self.debug.enable_debug && self.debug.debug_server_id == default_debug_server_id() {
+            error!(
+                "debug_server_id is default while debug mode is enabled. Please update it to a valid number."
             );
         }
     }
