@@ -1,10 +1,10 @@
 mod bot;
 
+use bot::commands::command_registration;
 use bot::commands::commands_list;
 use bot::utils::config::Config;
 use bot::utils::log::logger;
-
-use log::{error, info, warn};
+use log::{error, info};
 use poise::Framework;
 use poise::serenity_prelude as serenity;
 use std::process;
@@ -20,7 +20,7 @@ async fn main() {
 
 /* Asynchronously runs the bot and propagates any errors */
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    /* Load and validate configuration, then initialize logger */
+    /* Load configuration and initialize logger */
     let config = Config::load_or_create_and_validate_async().await?;
     logger::init_logger_with_config(&config).await?;
     info!("Starting bot.");
@@ -34,25 +34,26 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     info!("Gateway intents configured.");
 
     /* Determine debug guild ID if debug mode is enabled */
-    let guild_id = config.debug.enable_debug.then(|| {
-        config
+    let guild_id = if config.debug.enable_debug {
+        let id = config
             .debug
             .debug_server_id
             .parse::<u64>()
-            .expect("Invalid debug_server_id")
-    });
-    if let Some(id) = guild_id {
+            .expect("Invalid debug_server_id");
         info!("Using debug guild ID: {}", id);
-    }
+        Some(id)
+    } else {
+        None
+    };
 
     /* Build the Poise framework with registered commands */
+    let commands = commands_list::get_commands().await;
+    let options = poise::FrameworkOptions::<(), Box<dyn std::error::Error + Send + Sync>> {
+        commands,
+        ..Default::default()
+    };
     let framework = Framework::builder()
-        .options(
-            poise::FrameworkOptions::<(), Box<dyn std::error::Error + Send + Sync>> {
-                commands: commands_list::get_commands().await,
-                ..Default::default()
-            },
-        )
+        .options(options)
         .setup(|_ctx, _ready, _framework| Box::pin(async { Ok(()) }))
         .build();
 
@@ -61,45 +62,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .framework(framework)
         .await?;
 
-    /* Recover and set the application ID from Discord */
+    /* Retrieve and set the application ID from Discord */
     let http = client.http.clone();
     let app_info = http.get_current_application_info().await?;
     info!("Application ID: {}", app_info.id);
     http.set_application_id(app_info.id);
 
-    /* Purge global commands by deleting each one */
-    warn!("Purging all global commands.");
-    let global_commands = http.get_global_commands().await?;
-    for command in global_commands {
-        if let Err(e) = http.delete_global_command(command.id).await {
-            warn!("Failed to delete global command {}: {:?}", command.name, e);
-        } else {
-            info!("Deleted global command: {}", command.name);
-        }
-    }
-
-    /* In debug mode, manually purge existing guild commands and re-register updated ones */
-    if let Some(guild_id) = guild_id {
-        warn!("Purging existing guild commands for guild: {}", guild_id);
-        let http = client.http.clone();
-        let guild = serenity::GuildId::new(guild_id);
-
-        /* Retrieve and delete each existing guild command */
-        let existing_commands = guild.get_commands(&http).await?;
-        for command in existing_commands {
-            if let Err(e) = guild.delete_command(&http, command.id).await {
-                warn!("Failed to delete command {}: {:?}", command.name, e);
-            } else {
-                warn!("Deleted command: {}", command.name);
-            }
-        }
-
-        /* Register the current guild commands */
-        let commands = commands_list::get_commands().await;
-        let command_data = poise::builtins::create_application_commands(&commands);
-        guild.set_commands(&http, command_data).await?;
-        info!("Re-registered updated commands for guild: {}", guild_id);
-    }
+    /* Delegate command registration to the command_registration module */
+    command_registration::register_commands(&http, &config, guild_id).await?;
 
     /* Start the client and propagate any startup errors */
     client.start().await.map_err(|e| {
