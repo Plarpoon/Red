@@ -1,6 +1,5 @@
 use crate::bot::utils::config::Config;
 use crate::bot::utils::log::logrotate;
-
 use chrono::Local;
 use colored::Colorize;
 use fern::Dispatch;
@@ -29,15 +28,13 @@ impl<W: Write> NoEmptyLineWriter<W> {
 
 impl<W: Write> Write for NoEmptyLineWriter<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        /* Append incoming data to the internal buffer. */
+        /* Append incoming data to the internal buffer */
         self.buffer.extend_from_slice(buf);
-        /* Process complete lines. */
+        /* Process complete lines */
         while let Some(pos) = self.buffer.iter().position(|&b| b == b'\n') {
-            /* Drain one complete line (including the newline). */
+            /* Drain one complete line (including the newline) */
             let line_bytes: Vec<u8> = self.buffer.drain(..=pos).collect();
-            /* Convert to string and trim whitespace. */
             let line_str = String::from_utf8_lossy(&line_bytes).trim().to_string();
-            /* Write only non-empty lines. */
             if !line_str.is_empty() {
                 self.inner.write_all(&line_bytes)?;
             }
@@ -46,7 +43,7 @@ impl<W: Write> Write for NoEmptyLineWriter<W> {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        /* Flush any remaining data that does not end with a newline. */
+        /* Flush any remaining data that does not end with a newline */
         if !self.buffer.is_empty() {
             let line_str = String::from_utf8_lossy(&self.buffer).trim().to_string();
             if !line_str.is_empty() {
@@ -91,7 +88,28 @@ fn is_heartbeat(record: &Record) -> bool {
     HEARTBEAT_WORDS.contains(&msg.as_str())
 }
 
-/* Initializes the logger based on the provided configuration. */
+/* Returns a colored string for the log level */
+fn colorize_level(level: Level) -> colored::ColoredString {
+    match level {
+        Level::Error => "ERROR".red().bold(),
+        Level::Warn => "WARN".yellow().bold(),
+        Level::Info => "INFO".green().bold(),
+        Level::Debug => "DEBUG".blue().bold(),
+        Level::Trace => "TRACE".cyan().bold(),
+    }
+}
+
+/* Creates a log directory for the current date */
+async fn create_log_directory(base_dir: &str) -> io::Result<String> {
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    let log_dir = format!("{}/{}", base_dir, today);
+    if fs::metadata(&log_dir).await.is_err() {
+        fs::create_dir_all(&log_dir).await?;
+    }
+    Ok(log_dir)
+}
+
+/* Initializes the logger based on the provided configuration */
 pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
     /* Determine log level from configuration */
     let log_level = match config.logging.log_level.to_lowercase().as_str() {
@@ -103,48 +121,42 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
         _ => LevelFilter::Info,
     };
 
-    /* Create a log directory for today using Tokio's async file operations */
+    /* Create a log directory for today */
     let log_dir = create_log_directory(&config.logging.directory).await?;
     let red_log_path = format!("{}/red.log", log_dir);
     let serenity_log_path = format!("{}/serenity.log", log_dir);
     let heartbeat_log_path = format!("{}/heartbeat.log", log_dir);
 
-    /* Define non-serenity console formatting with colored log levels.
-       If the record is a heartbeat log, output an empty string.
-    */
+    /* Define non-serenity console formatting with colored log levels */
     let non_serenity_console_format =
         move |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &Record| {
             if is_heartbeat(record) {
-                out.finish(format_args!(""))
-            } else {
-                let level_color = colorize_level(record.level());
-                out.finish(format_args!(
-                    "{} [{}] {}",
-                    current_timestamp(),
-                    level_color,
-                    message
-                ))
+                return out.finish(format_args!(""));
             }
+            let level_color = colorize_level(record.level());
+            out.finish(format_args!(
+                "{} [{}] {}",
+                current_timestamp(),
+                level_color,
+                message
+            ))
         };
 
-    /* Define non-serenity file formatting (without colors).
-       If the record is a heartbeat log, output an empty string.
-    */
+    /* Define non-serenity file formatting without colors */
     let non_serenity_file_format =
         move |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &Record| {
             if is_heartbeat(record) {
-                out.finish(format_args!(""))
-            } else {
-                out.finish(format_args!(
-                    "{} [{}] {}",
-                    current_timestamp(),
-                    record.level(),
-                    message
-                ))
+                return out.finish(format_args!(""));
             }
+            out.finish(format_args!(
+                "{} [{}] {}",
+                current_timestamp(),
+                record.level(),
+                message
+            ))
         };
 
-    /* Define file formatting for general logs (no heartbeat filtering here) */
+    /* Define general file formatting */
     let file_format =
         move |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &Record| {
             out.finish(format_args!(
@@ -155,35 +167,27 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
             ))
         };
 
-    /* Define heartbeat file formatting.
-       If the record is a heartbeat log or has target "heartbeat", output normally; otherwise, output an empty string.
-    */
+    /* Define heartbeat file formatting */
     let heartbeat_file_format =
         move |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &Record| {
-            if record.target() == "heartbeat" || is_heartbeat(record) {
-                out.finish(format_args!(
-                    "{} [{}] {}",
-                    current_timestamp(),
-                    record.level(),
-                    message
-                ))
-            } else {
-                out.finish(format_args!(""))
+            if record.target() != "heartbeat" && !is_heartbeat(record) {
+                return out.finish(format_args!(""));
             }
+            out.finish(format_args!(
+                "{} [{}] {}",
+                current_timestamp(),
+                record.level(),
+                message
+            ))
         };
 
-    /* Define filters using Metadata.
-       For non-serenity chains, we use a simple metadata filter.
-       For serenity logs, we require that the target starts with "serenity" and the level is Warning or higher.
-    */
+    /* Define filters using Metadata */
     let non_serenity_filter = |metadata: &Metadata| !metadata.target().starts_with("serenity");
     let serenity_filter = |metadata: &Metadata| {
         metadata.target().starts_with("serenity") && metadata.level() >= Level::Warn
     };
 
-    /* Wrap the writers so that empty lines are not written.
-       We wrap the underlying writer in a Box<dyn Write + Send> to satisfy fern's requirements.
-    */
+    /* Wrap the writers so that empty lines are not written */
     let stdout_writer = create_boxed_writer(std::io::stdout());
     let red_file_writer = create_boxed_writer(fern::log_file(&red_log_path)?);
 
@@ -199,7 +203,6 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
     } else {
         None
     };
-
     let heartbeat_chain = if extra_logs {
         Some(
             Dispatch::new()
@@ -229,17 +232,12 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
     if let Some(serenity_disp) = serenity_chain {
         dispatch = dispatch.chain(serenity_disp);
     }
-
     if let Some(heartbeat_disp) = heartbeat_chain {
         dispatch = dispatch.chain(heartbeat_disp);
     }
 
     dispatch.apply()?;
 
-    /* Write an initialization message exclusively to serenity.log and heartbeat.log.
-       The message is logged at WARN level with targets "serenity" and "heartbeat" respectively.
-       These messages will be filtered out by non-extra log chains.
-    */
     if extra_logs {
         warn!(target: "serenity", "Logging initialized.");
         warn!(target: "heartbeat", "Logging initialized.");
@@ -263,25 +261,4 @@ pub async fn init_logger_with_config(config: &Config) -> Result<(), Box<dyn std:
     });
 
     Ok(())
-}
-
-/* Creates a log directory for the current date using Tokio's async file operations */
-async fn create_log_directory(base_dir: &str) -> io::Result<String> {
-    let today = Local::now().format("%Y-%m-%d").to_string();
-    let log_dir = format!("{}/{}", base_dir, today);
-    if fs::metadata(&log_dir).await.is_err() {
-        fs::create_dir_all(&log_dir).await?;
-    }
-    Ok(log_dir)
-}
-
-/* Returns a colored string for the log level */
-fn colorize_level(level: Level) -> colored::ColoredString {
-    match level {
-        Level::Error => "ERROR".red().bold(),
-        Level::Warn => "WARN".yellow().bold(),
-        Level::Info => "INFO".green().bold(),
-        Level::Debug => "DEBUG".blue().bold(),
-        Level::Trace => "TRACE".cyan().bold(),
-    }
 }

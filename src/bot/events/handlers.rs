@@ -12,8 +12,9 @@ impl EventHandler for Handler {
         info!("{} is connected!", ready.user.name);
     }
 
-    /* Called when a new message is received */
+    /* Called when a new message is received.
+       Poise automatically handles commands, so no additional processing is required.
+    */
     async fn message(&self, _ctx: SerenityContext, _msg: Message) {
-        /* Poise automatically handles commands. */
     }
 }

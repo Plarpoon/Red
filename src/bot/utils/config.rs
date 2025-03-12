@@ -227,36 +227,34 @@ impl Config {
     /* Validates and fixes the configuration by updating only invalid fields */
     fn validate_mut(&mut self) {
         /* Validate log level */
-        {
-            let valid_levels = ["info", "debug", "trace", "warn", "error"];
-            let log_validator = |s: &str| valid_levels.contains(&s.to_lowercase().as_str());
-            check_field(
-                &mut self.logging.log_level,
-                &default_log_level(),
-                "log_level",
-                log_validator,
-            );
-        }
+        let log_validator = |s: &str| {
+            ["info", "debug", "trace", "warn", "error"]
+                .iter()
+                .any(|&lvl| lvl.eq_ignore_ascii_case(s))
+        };
+
+        check_field(
+            &mut self.logging.log_level,
+            &default_log_level(),
+            "log_level",
+            log_validator,
+        );
 
         /* Validate frequency */
-        {
-            check_field(
-                &mut self.logrotate.frequency,
-                &default_frequency(),
-                "frequency",
-                is_valid_frequency,
-            );
-        }
+        check_field(
+            &mut self.logrotate.frequency,
+            &default_frequency(),
+            "frequency",
+            is_valid_frequency,
+        );
 
         /* Validate rotation time */
-        {
-            check_field(
-                &mut self.logrotate.rotation_time,
-                &default_rotation_time(),
-                "rotation_time",
-                is_valid_rotation_time,
-            );
-        }
+        check_field(
+            &mut self.logrotate.rotation_time,
+            &default_rotation_time(),
+            "rotation_time",
+            is_valid_rotation_time,
+        );
 
         /* Validate debug_server_id if debug mode is enabled */
         if self.debug.enable_debug && self.debug.debug_server_id == default_debug_server_id() {

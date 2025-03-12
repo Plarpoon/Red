@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio::fs;
 use tokio::time;
 
-/* Calculates the next rotation time based on the current time and a configured rotation time. */
+/* Calculates the next rotation time based on the current time and a configured rotation time */
 fn get_next_rotation_time(
     now: chrono::DateTime<Local>,
     rotation_time: NaiveTime,
@@ -18,46 +18,7 @@ fn get_next_rotation_time(
     }
 }
 
-/* Asynchronously schedules log rotation in an infinite loop.
-   It first performs an immediate rotation, then calculates the next rotation time,
-   sleeps until then, and rotates logs by deleting unwanted files and directories.
-*/
-pub async fn schedule_log_rotation(
-    base_dir: &str,
-    rotation_frequency_days: u64,
-    rotation_time_str: &str,
-) {
-    let rotation_time =
-        parse_rotation_time(rotation_time_str).expect("Invalid rotation time format");
-
-    /* Perform initial rotation immediately */
-    if let Err(e) = rotate_logs_async(base_dir, rotation_frequency_days).await {
-        log::error!("Initial log rotation failed: {}", e);
-    } else {
-        log::info!("Initial log rotation completed successfully.");
-    }
-
-    loop {
-        let now = Local::now();
-        let next_rotation = get_next_rotation_time(now, rotation_time);
-        let sleep_duration = (next_rotation - now.naive_local())
-            .to_std()
-            .unwrap_or(Duration::ZERO);
-        log::info!(
-            "Next log rotation scheduled at {} (in {:?}).",
-            next_rotation,
-            sleep_duration
-        );
-        time::sleep(sleep_duration).await;
-        if let Err(e) = rotate_logs_async(base_dir, rotation_frequency_days).await {
-            log::error!("Log rotation failed: {}", e);
-        } else {
-            log::info!("Log rotation completed successfully.");
-        }
-    }
-}
-
-/* Parses a rotation time string formatted as "HH:MM" into a NaiveTime. */
+/* Parses a rotation time string formatted as "HH:MM" into a NaiveTime */
 fn parse_rotation_time(rotation_time: &str) -> Option<NaiveTime> {
     let parts: Vec<&str> = rotation_time.split(':').collect();
     if parts.len() != 2 {
@@ -70,9 +31,9 @@ fn parse_rotation_time(rotation_time: &str) -> Option<NaiveTime> {
 
 /* Asynchronously processes a single directory entry.
    Valid entries:
-     - If the entry is a file, keep it only if its name is "heartbeat.log", "red.log", or "serenity.log".
-     - If the entry is a directory, keep it if its name is a valid date ("YYYY-MM-DD") and its age is less than the rotation limit.
-   All other entries are deleted.
+     - Files: keep if the name is "heartbeat.log", "red.log", or "serenity.log"; otherwise, delete.
+     - Directories: keep if the directory name is a valid date ("YYYY-MM-DD") and its age is less than the rotation limit;
+       otherwise, delete.
 */
 async fn process_entry_async(
     entry: &fs::DirEntry,
@@ -92,27 +53,27 @@ async fn process_entry_async(
             return Ok(());
         }
         log::warn!("Deleting unwanted file: {}", file_name);
-        fs::remove_file(&path).await?;
-        return Ok(());
+        return fs::remove_file(&path).await;
     }
 
-    if let Ok(dir_date) = NaiveDate::parse_from_str(&file_name, "%Y-%m-%d") {
-        let age = today.signed_duration_since(dir_date);
-        if age >= rotation_limit {
-            log::warn!("Deleting log directory: {}", file_name);
-            fs::remove_dir_all(&path).await?;
-            return Ok(());
+    match NaiveDate::parse_from_str(&file_name, "%Y-%m-%d") {
+        Ok(dir_date) => {
+            if today.signed_duration_since(dir_date) >= rotation_limit {
+                log::warn!("Deleting log directory: {}", file_name);
+                fs::remove_dir_all(&path).await
+            } else {
+                log::info!("Keeping log directory: {}", file_name);
+                Ok(())
+            }
         }
-        log::info!("Keeping log directory: {}", file_name);
-        return Ok(());
+        Err(_) => {
+            log::warn!("Deleting directory with invalid date name: {}", file_name);
+            fs::remove_dir_all(&path).await
+        }
     }
-
-    log::warn!("Deleting directory with invalid date name: {}", file_name);
-    fs::remove_dir_all(&path).await?;
-    Ok(())
 }
 
-/* Asynchronously rotates logs by deleting unwanted entries inside the base directory. */
+/* Asynchronously rotates logs by deleting unwanted entries inside the base directory */
 async fn rotate_logs_async(base_dir: &str, rotation_frequency_days: u64) -> std::io::Result<()> {
     log::info!("Log rotation has started.");
     log::info!(
@@ -133,6 +94,43 @@ async fn rotate_logs_async(base_dir: &str, rotation_frequency_days: u64) -> std:
     while let Some(entry) = read_dir.next_entry().await? {
         process_entry_async(&entry, rotation_limit, today).await?;
     }
-
     Ok(())
+}
+
+/* Asynchronously schedules log rotation in an infinite loop.
+   It performs an immediate rotation, then calculates the next rotation time,
+   sleeps until then, and rotates logs by deleting unwanted files and directories.
+*/
+pub async fn schedule_log_rotation(
+    base_dir: &str,
+    rotation_frequency_days: u64,
+    rotation_time_str: &str,
+) {
+    let rotation_time =
+        parse_rotation_time(rotation_time_str).expect("Invalid rotation time format");
+
+    /* Perform initial rotation immediately */
+    match rotate_logs_async(base_dir, rotation_frequency_days).await {
+        Ok(()) => log::info!("Initial log rotation completed successfully."),
+        Err(e) => log::error!("Initial log rotation failed: {}", e),
+    }
+
+    loop {
+        let now = Local::now();
+        let next_rotation = get_next_rotation_time(now, rotation_time);
+        let sleep_duration = (next_rotation - now.naive_local())
+            .to_std()
+            .unwrap_or(Duration::ZERO);
+        log::info!(
+            "Next log rotation scheduled at {} (in {:?}).",
+            next_rotation,
+            sleep_duration
+        );
+        time::sleep(sleep_duration).await;
+
+        match rotate_logs_async(base_dir, rotation_frequency_days).await {
+            Ok(()) => log::info!("Log rotation completed successfully."),
+            Err(e) => log::error!("Log rotation failed: {}", e),
+        }
+    }
 }

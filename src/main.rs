@@ -1,9 +1,7 @@
 mod bot;
 
-use bot::commands::command_registration;
-use bot::commands::commands_list;
-use bot::utils::config::Config;
-use bot::utils::log::logger;
+use bot::commands::{command_registration, commands_list};
+use bot::utils::{application_id, config::Config, log::logger};
 use log::{error, info};
 use poise::Framework;
 use poise::serenity_prelude as serenity;
@@ -34,13 +32,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     info!("Gateway intents configured.");
 
     /* Determine debug guild ID if debug mode is enabled */
-    let guild_id = if config.debug.enable_debug {
-        let id = config.debug.debug_server_id;
-        info!("Using debug guild ID: {}", id);
-        Some(id)
-    } else {
-        None
-    };
+    let guild_id = config.debug.enable_debug.then(|| {
+        info!("Using debug guild ID: {}", config.debug.debug_server_id);
+        config.debug.debug_server_id
+    });
 
     /* Build the Poise framework with registered commands */
     let commands = commands_list::get_commands().await;
@@ -58,11 +53,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .framework(framework)
         .await?;
 
-    /* Retrieve and set the application ID from Discord */
+    /* Get the HTTP client from Serenity */
     let http = client.http.clone();
-    let app_info = http.get_current_application_info().await?;
-    info!("Application ID: {}", app_info.id);
-    http.set_application_id(app_info.id);
+
+    /* Retrieve the application ID using */
+    let application_id = application_id::get_application_id(&http).await?;
+    info!("Application ID: {}", application_id);
+    http.set_application_id(application_id);
 
     /* Delegate command registration to the command_registration module */
     command_registration::register_commands(&http, &config, guild_id).await?;

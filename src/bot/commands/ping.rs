@@ -2,7 +2,6 @@
     slash_command,
     description_localized("en-US", "Ping the bot to calculate latency to Discord's API.")
 )]
-
 pub async fn ping(
     ctx: poise::Context<'_, (), Box<dyn std::error::Error + Send + Sync>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -32,30 +31,22 @@ pub async fn ping(
         )
         .await?;
 
-    /* Retrieve the invoking user's tag */
     let username = ctx.author().tag();
 
-    /* Retrieve guild channel once to reduce repetition */
-    let guild_channel = ctx.guild_channel().await;
-
-    /* Get the channel name or "DM" if not in a guild */
-    let channel_name = guild_channel
-        .as_ref()
-        .map(|gc| gc.name.clone())
-        .unwrap_or_else(|| "DM".to_string());
-
-    /* Get the guild name or "DM" if not in a guild channel */
-    let guild_name = if let Some(gc) = guild_channel {
-        gc.guild_id
-            .to_partial_guild(&ctx.serenity_context().http)
-            .await
-            .map(|g| g.name)
-            .unwrap_or_else(|_| "Unknown".to_string())
-    } else {
-        "DM".to_string()
+    let (channel_name, guild_name) = match ctx.guild_channel().await {
+        Some(gc) => {
+            let channel_name = gc.name.clone();
+            let guild_name = gc
+                .guild_id
+                .to_partial_guild(&ctx.serenity_context().http)
+                .await
+                .map(|g| g.name)
+                .unwrap_or_else(|_| "Unknown".to_string());
+            (channel_name, guild_name)
+        }
+        None => ("DM".to_string(), "DM".to_string()),
     };
 
-    /* Log the execution details including the username, channel, and guild */
     log::info!(
         "Ping command by {} in channel '{}' of guild '{}' responded with {}ms",
         username,
