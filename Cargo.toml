@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 # Discord API
 poise = "0.6.1"
+songbird = "0.5.0"
 
 # Async runtime
 tokio = { version = "1.44.0", features = ["full"] }
@@ -31,3 +32,4 @@ log = "0.4.26"
 
 # Utilities
 colored = "3.0.0"
+reqwest = "0.12.13"
