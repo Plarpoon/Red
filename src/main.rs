@@ -28,7 +28,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     info!("Discord bot token retrieved.");
     let intents = serenity::GatewayIntents::GUILD_MESSAGES
         | serenity::GatewayIntents::DIRECT_MESSAGES
-        | serenity::GatewayIntents::MESSAGE_CONTENT;
+        | serenity::GatewayIntents::MESSAGE_CONTENT
+        | serenity::GatewayIntents::GUILD_MEMBERS
+        | serenity::GatewayIntents::GUILD_VOICE_STATES;
     info!("Gateway intents configured.");
 
     /* Determine debug guild ID if debug mode is enabled */
@@ -65,7 +67,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     command_registration::register_commands(&http, &config, guild_id).await?;
 
     /* Start the client and propagate any startup errors */
-    client.start().await.map_err(|e| {
+    client.start_autosharded().await.map_err(|e| {
         error!("Client error: {:?}", e);
         e.into()
     })

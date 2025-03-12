@@ -1,79 +1,306 @@
-use reqwest::Client;
-use songbird;
+use async_trait::async_trait;
+use reqwest;
+use songbird::events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent};
+use songbird::{self, input::YoutubeDl};
+use std::error::Error;
 
-/* The parent music command. */
-/* Use `/music` to see available subcommands. */
-#[poise::command(slash_command, prefix_command, hide_in_help, subcommands("play"))]
+struct TrackErrorNotifier;
+
+#[async_trait]
+impl VoiceEventHandler for TrackErrorNotifier {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        if let EventContext::Track(track_list) = ctx {
+            for (state, handle) in *track_list {
+                println!(
+                    "Track {:?} encountered an error: {:?}",
+                    handle.uuid(),
+                    state.playing
+                );
+            }
+        }
+        None
+    }
+}
+
+/* Parent command for all music-related commands */
+#[poise::command(
+    slash_command,
+    prefix_command,
+    subcommands("join", "leave", "play", "mute", "unmute", "deafen", "undeafen"),
+    description_localized("en-US", "Music related commands")
+)]
 pub async fn music(
-    ctx: poise::Context<'_, (), Box<dyn std::error::Error + Send + Sync>>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    /* Extract the HTTP handle from the serenity context. */
-    let http = ctx.serenity_context().http.clone();
-    /* Respond using the HTTP handle and channel ID. */
-    ctx.channel_id()
-        .say(&http, "Available subcommands: play")
+    ctx: poise::Context<'_, (), Box<dyn Error + Send + Sync>>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    /* Inform the user to use a subcommand */
+    ctx.say("Please use a subcommand: join, leave, play, mute, unmute, deafen, or undeafen.")
         .await?;
     Ok(())
 }
 
-/* Play sub-command. */
-/* Usage: `/music play <url>` */
+/* Join the voice channel the user is currently in */
 #[poise::command(
     slash_command,
-    description_localized("en-US", "Play audio from a YouTube URL in your voice channel")
+    prefix_command,
+    guild_only,
+    description_localized("en-US", "Join the voice channel you're currently in.")
+)]
+pub async fn join(
+    ctx: poise::Context<'_, (), Box<dyn Error + Send + Sync>>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let guild_id = ctx
+        .guild_id()
+        .ok_or("This command can only be used in a guild")?;
+    let cache = ctx.serenity_context().cache.clone();
+    let channel_id = match cache
+        .guild(guild_id)
+        .and_then(|guild| guild.voice_states.get(&ctx.author().id).cloned())
+        .and_then(|vs| vs.channel_id)
+    {
+        Some(id) => id,
+        None => {
+            ctx.say("You are not in a voice channel.").await?;
+            return Ok(());
+        }
+    };
+
+    let manager = songbird::get(ctx.serenity_context())
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    match manager.join(guild_id, channel_id).await {
+        Ok(handler_lock) => {
+            let mut handler = handler_lock.lock().await;
+            handler.add_global_event(TrackEvent::Error.into(), TrackErrorNotifier);
+            ctx.say(&format!("Joined voice channel: {:?}", channel_id))
+                .await?;
+        }
+        Err(e) => {
+            ctx.say(&format!("Failed to join voice channel: {:?}", e))
+                .await?;
+        }
+    }
+    Ok(())
+}
+
+/* Leave the current voice channel */
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    description_localized("en-US", "Leave the current voice channel.")
+)]
+pub async fn leave(
+    ctx: poise::Context<'_, (), Box<dyn Error + Send + Sync>>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let guild_id = ctx
+        .guild_id()
+        .ok_or("This command can only be used in a guild")?;
+    let manager = songbird::get(ctx.serenity_context())
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    if manager.get(guild_id).is_none() {
+        ctx.say("Not in a voice channel.").await?;
+        return Ok(());
+    }
+    match manager.remove(guild_id).await {
+        Ok(_) => {
+            ctx.say("Left the voice channel.").await?;
+        }
+        Err(e) => {
+            ctx.say(&format!("Failed to leave voice channel: {:?}", e))
+                .await?;
+        }
+    }
+    Ok(())
+}
+
+/* Play a song from a URL or search query */
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    description_localized("en-US", "Play a song from a provided URL or search query.")
 )]
 pub async fn play(
-    ctx: poise::Context<'_, (), Box<dyn std::error::Error + Send + Sync>>,
-    #[description = "The YouTube URL of the video to play"] url: String,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    /* Extract and drop non-Send references as early as possible. */
-    let author_id = ctx.author().id;
-    let author_tag = ctx.author().tag();
-    let (guild_id, channel_id) = {
-        let guild = ctx
-            .guild()
-            .ok_or("This command can only be used in a guild")?;
-        let guild_id = guild.id;
-        let channel_id = guild
-            .voice_states
-            .get(&author_id)
-            .and_then(|vs| vs.channel_id)
-            .ok_or("You must be in a voice channel to use this command")?;
-        (guild_id, channel_id)
-    };
-    let url_for_source = url.clone();
+    ctx: poise::Context<'_, (), Box<dyn Error + Send + Sync>>,
+    #[description_localized("en-US", "URL or search query")] url: String,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let guild_id = ctx
+        .guild_id()
+        .ok_or("This command can only be used in a guild")?;
+    let do_search = !url.starts_with("http");
+    let http_client = reqwest::Client::new();
 
-    /* Clone the serenity context to get owned, Send–compatible data. */
-    let serenity_ctx = ctx.serenity_context().clone();
-    let http = serenity_ctx.http.clone();
-
-    /* Now perform async operations without holding non-Send references. */
-    let manager = songbird::get(&serenity_ctx)
+    let manager = songbird::get(ctx.serenity_context())
         .await
-        .expect("Songbird voice client should be initialized")
+        .expect("Songbird Voice client placed in at initialisation.")
         .clone();
-    let handler_lock = manager.join(guild_id, channel_id).await?;
 
-    let client = Client::new();
-    let source = songbird::input::YoutubeDl::new_ytdl_like("yt-dlp", client, url_for_source).into();
-    {
-        /* Lock the handler and play the audio source. */
-        let mut handler = handler_lock.lock().await;
-        handler.play_input(source);
+    let handler_lock = match manager.get(guild_id) {
+        Some(lock) => lock,
+        None => {
+            ctx.say("Not in a voice channel to play in.").await?;
+            return Ok(());
+        }
+    };
+
+    let mut handler = handler_lock.lock().await;
+    let src = if do_search {
+        YoutubeDl::new_search(http_client, url)
+    } else {
+        YoutubeDl::new(http_client, url)
+    };
+    handler.play_input(src.into());
+    ctx.say("Playing song.").await?;
+    Ok(())
+}
+
+/* Mute the bot in the current voice channel */
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    description_localized("en-US", "Mute the bot in the current voice channel.")
+)]
+pub async fn mute(
+    ctx: poise::Context<'_, (), Box<dyn Error + Send + Sync>>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let guild_id = ctx
+        .guild_id()
+        .ok_or("This command can only be used in a guild")?;
+    let manager = songbird::get(ctx.serenity_context())
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    let handler_lock = match manager.get(guild_id) {
+        Some(lock) => lock,
+        None => {
+            ctx.say("Not in a voice channel.").await?;
+            return Ok(());
+        }
+    };
+
+    let mut handler = handler_lock.lock().await;
+    if handler.is_mute() {
+        ctx.say("Already muted.").await?;
+    } else if let Err(e) = handler.mute(true).await {
+        ctx.say(&format!("Failed to mute: {:?}", e)).await?;
+    } else {
+        ctx.say("Muted.").await?;
     }
+    Ok(())
+}
 
-    /* Send a confirmation message using the cloned HTTP handle. */
-    channel_id
-        .say(&http, "Now playing audio from the provided YouTube URL.")
-        .await?;
+/* Unmute the bot in the current voice channel */
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    description_localized("en-US", "Unmute the bot in the current voice channel.")
+)]
+pub async fn unmute(
+    ctx: poise::Context<'_, (), Box<dyn Error + Send + Sync>>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let guild_id = ctx
+        .guild_id()
+        .ok_or("This command can only be used in a guild")?;
+    let manager = songbird::get(ctx.serenity_context())
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
 
-    /* Log command execution details. */
-    log::info!(
-        "Play command invoked by {} in voice channel {} with URL {}",
-        author_tag,
-        channel_id,
-        url
-    );
+    let handler_lock = match manager.get(guild_id) {
+        Some(lock) => lock,
+        None => {
+            ctx.say("Not in a voice channel.").await?;
+            return Ok(());
+        }
+    };
 
+    let mut handler = handler_lock.lock().await;
+    if !handler.is_mute() {
+        ctx.say("Not muted.").await?;
+    } else if let Err(e) = handler.mute(false).await {
+        ctx.say(&format!("Failed to unmute: {:?}", e)).await?;
+    } else {
+        ctx.say("Unmuted.").await?;
+    }
+    Ok(())
+}
+
+/* Deafen the bot in the current voice channel */
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    description_localized("en-US", "Deafen the bot in the current voice channel.")
+)]
+pub async fn deafen(
+    ctx: poise::Context<'_, (), Box<dyn Error + Send + Sync>>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let guild_id = ctx
+        .guild_id()
+        .ok_or("This command can only be used in a guild")?;
+    let manager = songbird::get(ctx.serenity_context())
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    let handler_lock = match manager.get(guild_id) {
+        Some(lock) => lock,
+        None => {
+            ctx.say("Not in a voice channel.").await?;
+            return Ok(());
+        }
+    };
+
+    let mut handler = handler_lock.lock().await;
+    if handler.is_deaf() {
+        ctx.say("Already deafened.").await?;
+    } else if let Err(e) = handler.deafen(true).await {
+        ctx.say(&format!("Failed to deafen: {:?}", e)).await?;
+    } else {
+        ctx.say("Deafened.").await?;
+    }
+    Ok(())
+}
+
+/* Undeafen the bot in the current voice channel */
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    description_localized("en-US", "Undeafen the bot in the current voice channel.")
+)]
+pub async fn undeafen(
+    ctx: poise::Context<'_, (), Box<dyn Error + Send + Sync>>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let guild_id = ctx
+        .guild_id()
+        .ok_or("This command can only be used in a guild")?;
+    let manager = songbird::get(ctx.serenity_context())
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    let handler_lock = match manager.get(guild_id) {
+        Some(lock) => lock,
+        None => {
+            ctx.say("Not in a voice channel.").await?;
+            return Ok(());
+        }
+    };
+
+    let mut handler = handler_lock.lock().await;
+    if let Err(e) = handler.deafen(false).await {
+        ctx.say(&format!("Failed to undeafen: {:?}", e)).await?;
+    } else {
+        ctx.say("Undeafened.").await?;
+    }
     Ok(())
 }

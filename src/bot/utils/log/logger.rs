@@ -1,5 +1,4 @@
-use crate::bot::utils::config::Config;
-use crate::bot::utils::log::logrotate;
+use crate::bot::utils::{config::Config, log::logrotate};
 use chrono::Local;
 use colored::Colorize;
 use fern::Dispatch;
@@ -70,6 +69,7 @@ fn is_heartbeat(record: &Record) -> bool {
     const HEARTBEAT_WORDS: &[&str] = &[
         "into_future;",
         "start;",
+        "start_autosharded;",
         "shutdown_all;",
         "initialize;",
         "run;",

@@ -1,5 +1,4 @@
-use crate::bot::commands::commands_list;
-use crate::bot::utils::config::Config;
+use crate::bot::{commands::commands_list, utils::config::Config};
 use log::{info, warn};
 use poise::serenity_prelude as serenity;
 

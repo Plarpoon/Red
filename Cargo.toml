@@ -33,3 +33,4 @@ log = "0.4.26"
 # Utilities
 colored = "3.0.0"
 reqwest = { version = "0.12.13", features = ["json"] }
+async-trait = "0.1.87"
