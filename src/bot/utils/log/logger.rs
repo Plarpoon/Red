@@ -73,6 +73,7 @@ fn is_heartbeat(record: &Record) -> bool {
         "shutdown_all;",
         "initialize;",
         "run;",
+        "runner;",
         "latency;",
         "check_last_start;",
         "recv;",

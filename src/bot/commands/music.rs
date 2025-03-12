@@ -64,10 +64,13 @@ pub async fn join(
         }
     };
 
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
+    let manager = match songbird::get(ctx.serenity_context()).await {
+        Some(m) => m.clone(),
+        None => {
+            ctx.say("Songbird Voice client is not available.").await?;
+            return Ok(());
+        }
+    };
 
     match manager.join(guild_id, channel_id).await {
         Ok(handler_lock) => {
@@ -97,10 +100,13 @@ pub async fn leave(
     let guild_id = ctx
         .guild_id()
         .ok_or("This command can only be used in a guild")?;
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
+    let manager = match songbird::get(ctx.serenity_context()).await {
+        Some(m) => m.clone(),
+        None => {
+            ctx.say("Songbird Voice client is not available.").await?;
+            return Ok(());
+        }
+    };
 
     if manager.get(guild_id).is_none() {
         ctx.say("Not in a voice channel.").await?;
@@ -135,10 +141,13 @@ pub async fn play(
     let do_search = !url.starts_with("http");
     let http_client = reqwest::Client::new();
 
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
+    let manager = match songbird::get(ctx.serenity_context()).await {
+        Some(m) => m.clone(),
+        None => {
+            ctx.say("Songbird Voice client is not available.").await?;
+            return Ok(());
+        }
+    };
 
     let handler_lock = match manager.get(guild_id) {
         Some(lock) => lock,
@@ -172,10 +181,13 @@ pub async fn mute(
     let guild_id = ctx
         .guild_id()
         .ok_or("This command can only be used in a guild")?;
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
+    let manager = match songbird::get(ctx.serenity_context()).await {
+        Some(m) => m.clone(),
+        None => {
+            ctx.say("Songbird Voice client is not available.").await?;
+            return Ok(());
+        }
+    };
 
     let handler_lock = match manager.get(guild_id) {
         Some(lock) => lock,
@@ -209,10 +221,13 @@ pub async fn unmute(
     let guild_id = ctx
         .guild_id()
         .ok_or("This command can only be used in a guild")?;
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
+    let manager = match songbird::get(ctx.serenity_context()).await {
+        Some(m) => m.clone(),
+        None => {
+            ctx.say("Songbird Voice client is not available.").await?;
+            return Ok(());
+        }
+    };
 
     let handler_lock = match manager.get(guild_id) {
         Some(lock) => lock,
@@ -246,10 +261,13 @@ pub async fn deafen(
     let guild_id = ctx
         .guild_id()
         .ok_or("This command can only be used in a guild")?;
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
+    let manager = match songbird::get(ctx.serenity_context()).await {
+        Some(m) => m.clone(),
+        None => {
+            ctx.say("Songbird Voice client is not available.").await?;
+            return Ok(());
+        }
+    };
 
     let handler_lock = match manager.get(guild_id) {
         Some(lock) => lock,
@@ -283,10 +301,13 @@ pub async fn undeafen(
     let guild_id = ctx
         .guild_id()
         .ok_or("This command can only be used in a guild")?;
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
+    let manager = match songbird::get(ctx.serenity_context()).await {
+        Some(m) => m.clone(),
+        None => {
+            ctx.say("Songbird Voice client is not available.").await?;
+            return Ok(());
+        }
+    };
 
     let handler_lock = match manager.get(guild_id) {
         Some(lock) => lock,

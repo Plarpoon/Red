@@ -48,7 +48,7 @@ async fn register_debug_commands(
     let commands = commands_list::get_commands().await;
     let command_data = poise::builtins::create_application_commands(&commands);
     guild.set_commands(http, command_data).await?;
-    info!("Re-registered updated commands for guild: {}", guild_id);
+    warn!("Re-registered updated commands for guild: {}", guild_id);
     Ok(())
 }
 
@@ -59,6 +59,6 @@ async fn register_global_commands(http: &serenity::Http) -> Result<(), Box<dyn s
     let commands = commands_list::get_commands().await;
     let command_data = poise::builtins::create_application_commands(&commands);
     http.create_global_command(&command_data).await?;
-    info!("Registered global commands.");
+    warn!("Registered global commands.");
     Ok(())
 }

@@ -5,6 +5,7 @@ use bot::utils::{application_id, config::Config, log::logger};
 use log::{error, info};
 use poise::Framework;
 use poise::serenity_prelude as serenity;
+use songbird::SerenityInit;
 use std::process;
 
 #[tokio::main]
@@ -50,15 +51,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .setup(|_ctx, _ready, _framework| Box::pin(async { Ok(()) }))
         .build();
 
-    /* Create the Serenity client with the attached Poise framework */
+    /* Create the Serenity client with the attached Poise framework and register Songbird */
     let mut client = serenity::ClientBuilder::new(token, intents)
+        .register_songbird()
         .framework(framework)
         .await?;
 
     /* Get the HTTP client from Serenity */
     let http = client.http.clone();
 
-    /* Retrieve the application ID using */
+    /* Retrieve the application ID */
     let application_id = application_id::get_application_id(&http).await?;
     info!("Application ID: {}", application_id);
     http.set_application_id(application_id);
